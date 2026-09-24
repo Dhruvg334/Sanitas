@@ -3,7 +3,8 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Sanitas",
-  description: "AI Clinical Document Reviewer",
+  description:
+    "Sanitas: a clinical document reviewer for synthetic data, currently under development.",
 };
 
 export default function RootLayout({

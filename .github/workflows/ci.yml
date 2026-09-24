@@ -19,7 +19,8 @@ jobs:
         with:
           node-version: 22
 
-      - run: npm install
+      - run: npm ci
+      - run: npm run lint
       - run: npm run typecheck
       - run: npm run build
 
@@ -36,6 +37,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      - run: python -m pip install --upgrade pip
-      - run: pip install -r requirements.txt
+      - run: python -m pip install -r requirements.txt
+      - run: python -m pip check
       - run: pytest
+      - name: Application import and startup
+        run: python -m app.smoke

@@ -1,17 +1,5 @@
-# AI/ML Design
+# AI Design
 
-This document is the public AI/ML design record required for the Sanitas submission.
+Sanitas has no implemented model calls, document processing, extraction schemas, evidence validation, or clinical report generation. No model credentials are needed for the current application.
 
-It must evolve with the implementation and document only behavior that is actually implemented and tested.
-
-The final document should cover:
-- document processing
-- information extraction
-- structured output
-- evidence grounding
-- uncertainty handling
-- hallucination reduction
-- malformed-output handling
-- model/service choice
-- important trade-offs
-- evaluation methodology
+The project is restricted to synthetic clinical data. Its clinical review boundary excludes unsupported diagnoses, treatment recommendations, and undocumented clinical inference. No AI quality or safety performance is claimed for this foundation.

@@ -5,8 +5,8 @@ export default function HomePage() {
         <p className="brand">Sanitas</p>
         <h1>Clinical document review, grounded in evidence.</h1>
         <p className="lede">
-          The frontend foundation is ready. Document submission and clinical
-          review workflows are intentionally reserved for the implementation phases.
+          Sanitas is being built for synthetic clinical documents. Document
+          submission and clinical review are not available yet.
         </p>
         <div className="status-panel">
           <span>Foundation status</span>
