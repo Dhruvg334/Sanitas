@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,8 +17,8 @@ class Settings(BaseSettings):
 
     max_file_bytes: int = 10 * 1024 * 1024
     max_pdf_pages: int = 15
-    max_text_chars: int = 50_000
-    model_timeout_seconds: int = 90
+    max_text_chars: int = Field(default=50_000, ge=1, le=50_000)
+    model_timeout_seconds: int = Field(default=90, ge=1, le=120)
 
     rate_limit_hmac_secret: str = "change-me"
     daily_request_limit: int = 20

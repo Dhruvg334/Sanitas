@@ -1,31 +1,47 @@
 # Technical Decisions
 
-## Separate applications
+## Independent Deployable Applications on Vercel
 
-Next.js/TypeScript and FastAPI/Python remain independently runnable services. This keeps the browser-facing application separate from backend configuration and document-service dependencies. The trade-off is two development processes and explicit CORS configuration; the placeholder page does not yet call the API.
+Next.js/TypeScript (`apps/web`) and FastAPI/Python (`apps/api`) are maintained in a monorepo but deploy as two independent Vercel projects:
+- **Frontend Project:** Vercel Next.js framework preset targeting root directory `apps/web`. Uses `NEXT_PUBLIC_API_BASE_URL` to route requests to the deployed backend.
+- **Backend Project:** Vercel Python runtime targeting root directory `apps/api`. Uses standard Vercel framework preset configuration (`[tool.vercel] entrypoint = "app.main:app"` in `pyproject.toml`) and `functions` maxDuration configuration in `vercel.json`.
 
-## Reproducible dependencies
+This maintains loose coupling between UI presentation and backend AI processing without requiring complex server orchestration.
 
-The frontend uses exact package versions and npm's lockfile, installed with `npm ci`. This preserves the resolved dependency tree instead of re-resolving floating `latest` declarations on each checkout. ESLint runs directly with the matching Next.js flat configuration; lint, typecheck, and build are separate checks.
+## Reproducible Dependencies
 
-The backend targets Python 3.12. `requirements.in` records exact direct dependencies and `requirements.txt` locks transitive dependencies with platform markers. A Windows-only `pip freeze` was avoided because CI runs on Linux. Ordinary installation uses pip; uv is needed only to regenerate the resolution. Updating pins is deliberate maintenance, followed by the checks in the README.
+The frontend uses exact dependency versions pinned in `apps/web/package.json` and locked with `apps/web/package-lock.json`, installed via `npm ci`. ESLint 9.39.5 and TypeScript 6.0.3 are pinned to maintain compatibility with Next.js flat configuration without peer override flags.
 
-Existing database, model SDK, document parsing, retry, and logging packages are retained to preserve the selected dependency baseline. Most are not yet called by the application. No orchestration framework, queue, authentication provider, or additional service was added.
-
-To regenerate the backend lock after changing direct pins, use uv 0.12.18 from `apps/api`:
+The backend targets Python 3.12 with direct requirements recorded in `apps/api/requirements.in`. Complete transitive dependencies (including cross-platform markers for Linux and Windows) are pinned in `apps/api/requirements.txt` compiled using uv 0.12.18:
 
 ```sh
 uv pip compile --python-version 3.12 --universal requirements.in --output-file requirements.txt
 ```
 
-The universal resolution preserves Windows and Linux dependency markers. uv is a maintenance tool, not an application dependency.
+uv is an isolated build/maintenance tool and is not required for production deployment or ordinary developer setup.
 
-TypeScript 6.0.3 is used because the installed TypeScript ESLint tooling does not support TypeScript 7. ESLint 9.39.5 is deprecated upstream, but remains within the React, import, and accessibility plugins' supported peer ranges; ESLint 10 is outside those ranges. The current dependency tree installs without forcing peer overrides. Node types match the Node 22 runtime target.
+## Synchronous Vertical Slice vs Asynchronous Workers
 
-## Independent liveness
+For this initial synthetic plain-text slice, analysis execution is synchronous:
+- Plain-text note payloads are bounded to 50,000 characters.
+- Structured Gemini model calls complete well within the serverless function timeout (default 90s, bounded to 120s maxDuration).
+- Avoiding an external queue (Celery, Redis) or persistence worker keeps the free-tier deployment operational with minimal infrastructure footprint and zero cold-start database friction.
 
-`GET /health` reports application liveness without initializing database or model clients. This permits secret-free local startup and isolates process health from external-service availability. It is not a database-readiness check.
+## Deterministic Canonicalization & Evidence Verification
 
-## Minimal frontend
+Rather than asking an LLM to segment text or trusting structured model outputs blindly:
+- Plain text is segmented into Page 1 lines (`p1-s1`, `p1-s2`, etc.) deterministically in Python before any model call.
+- After Gemini extraction, application code deterministically verifies that referenced segments exist, page numbers match, and quotes are verbatim substrings in normalized segment text.
+- Claims failing evidence verification fail closed with `EVIDENCE_VALIDATION_FAILED`.
 
-The placeholder uses server-rendered content and plain responsive CSS. TanStack Query remains installed but unused. A component library and frontend test framework would add maintenance without exercising an existing product interaction, so neither is configured.
+## Secret-Free Startup & Independent Liveness
+
+Importing `app.main` or running `GET /health` never initializes the Gemini SDK or database clients. The `google.genai` SDK is imported lazily inside the extractor service only when an analysis request is received. This allows CI workflows, smoke tests, and local developer health checks to execute without API credentials.
+
+## Safe Error Taxonomy
+
+No raw Gemini exception messages, tracebacks, or document texts are exposed to the client. All failures are caught and mapped to a safe `SafeError` response containing:
+- A standardized `ErrorCode` string
+- A safe user-facing message
+- An actionable suggestion
+- A unique correlation ID (`uuid4`)
