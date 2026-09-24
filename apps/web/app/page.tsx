@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import ReviewReportView, { AnalysisResponse } from "./components/ReviewReportView";
+import PageGuideBanner from "./components/PageGuideBanner";
 
 interface SafeError {
   code: string;
@@ -17,7 +18,21 @@ interface ApiErrorResponse {
 
 const MAX_TEXT_CHARS = 50000;
 
-const SYNTHETIC_DEMO_NOTE = `Patient: Elena Rostova
+interface DemoPreset {
+  id: string;
+  label: string;
+  category: string;
+  description: string;
+  text: string;
+}
+
+const DEMO_PRESETS: DemoPreset[] = [
+  {
+    id: "ambulatory",
+    label: "Ambulatory Follow-up",
+    category: "General Practice",
+    description: "Elena Rostova: 54yo female, Type 2 Diabetes, Metformin, discontinued Lisinopril, headache.",
+    text: `Patient: Elena Rostova
 Age: 54 | DOB: 1972-04-12 | MRN: SYN-88421 | Sex: Female
 Chief Complaint: Acute onset bilateral throbbing headache for past 3 days with mild photophobia.
 History of Present Illness:
@@ -37,11 +52,76 @@ No known drug allergies.
 Clinical Observations:
 Alert and oriented x4. Cranial nerves II-XII grossly intact. No focal neurological deficits.
 Uncertain Items:
-Patient unsure whether current headache is related to recent reduction in daily caffeine intake.`;
+Patient unsure whether current headache is related to recent reduction in daily caffeine intake.`,
+  },
+  {
+    id: "allergy_conflict",
+    label: "Allergy Inconsistency Case",
+    category: "Contradiction Detection",
+    description: "Marcus Vance: Header notes NKDA, but encounter documents acute anaphylactoid reaction to Amoxicillin.",
+    text: `PATIENT CLINICAL SUMMARY
+Patient Name: Marcus Vance
+DOB: 1982-07-19 | Age: 42 | Sex: Male | MRN: SYN-49012
+ALLERGIES: NKDA (No Known Drug Allergies)
+Chief Complaint: Acute facial angioedema and diffuse pruritic urticaria.
+Encounter Narrative:
+Patient presented to urgent care 45 minutes after ingesting Amoxicillin 500mg oral capsule prescribed by dentist.
+Developed severe periorbital edema, lip swelling, and erythematous wheals over bilateral upper extremities.
+Assessment:
+1. Acute allergic drug reaction secondary to Amoxicillin.
+2. Contradictory intake documentation (intake sheet states NKDA).
+Plan:
+Administer diphenhydramine 50mg IM stat and dexamethasone 10mg IV.
+Update allergy record immediately: Penicillin class antibiotics strictly contraindicated.`,
+  },
+  {
+    id: "medication_conflict",
+    label: "Medication Status Conflict",
+    category: "Contradiction Detection",
+    description: "Sarah Jenkins: Lisinopril listed as active daily, yet discharge instructions order immediate discontinuation.",
+    text: `PROGRESS & DISCHARGE RECORD
+Patient: Sarah Jenkins | Age: 61 | Sex: Female | MRN: SYN-30419
+Active Problem List: Essential Hypertension, Hyperlipidemia.
+Medications at Encounter Start:
+- Lisinopril 20 mg oral daily with breakfast.
+- Atorvastatin 20 mg oral daily at bedtime.
+Subjective & History:
+Patient reports a persistent, intractable, dry, non-productive nocturnal cough for 4 weeks.
+Exam:
+Lungs clear bilaterally. Oropharynx normal without erythema.
+Discharge Orders:
+Discontinue Lisinopril immediately due to suspected ACE-inhibitor induced cough.
+Initiate Losartan 50 mg oral daily as alternative angiotensin receptor blocker.
+Follow up with primary care in 3 weeks with repeat basic metabolic panel.`,
+  },
+  {
+    id: "acute_abdomen",
+    label: "Emergency Acute Abdomen",
+    category: "Emergency Triage",
+    description: "David Miller: 29yo male, severe right lower quadrant abdominal pain, rebound tenderness, surgical consult.",
+    text: `EMERGENCY DEPARTMENT ENCOUNTER
+Patient: David Miller | Age: 29 | Sex: Male | MRN: SYN-11894
+Triage Time: 02:40 AM
+Chief Complaint: Progressive worsening right lower quadrant abdominal pain for 14 hours.
+Associated Symptoms: Anorexia, nausea, two episodes of non-bloody vomiting. Denies diarrhea.
+Vital Signs:
+BP: 124/76 mmHg | HR: 104 bpm (sinus tachycardia) | RR: 20 /min | Temp: 100.9 F | SpO2: 99%
+Physical Examination:
+Abdomen: Flat. Markedly tender to palpation at McBurney point with localized involuntary guarding and positive Rovsing sign.
+Laboratory & Diagnostics:
+WBC: 14.8 x10^3/uL (neutrophilic leukocytosis).
+Impression:
+Acute appendicitis with localized peritoneal irritation.
+Plan:
+NPO status. Intravenous normal saline infusion at 125 mL/hr.
+Stat surgical consultation requested for diagnostic laparoscopy / appendectomy.`,
+  },
+];
 
 export default function WorkbenchPage() {
   const [inputMode, setInputMode] = useState<"text" | "pdf" | "image">("text");
-  const [noteText, setNoteText] = useState("");
+  const [noteText, setNoteText] = useState(DEMO_PRESETS[0].text);
+  const [activePreset, setActivePreset] = useState<string>("ambulatory");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -49,13 +129,15 @@ export default function WorkbenchPage() {
   const [networkError, setNetworkError] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null);
   const [highlightedSegment, setHighlightedSegment] = useState<string | null>(null);
+  const [copiedSegmentId, setCopiedSegmentId] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
-  const handleLoadTextDemo = () => {
+  const handleSelectPreset = (preset: DemoPreset) => {
     setInputMode("text");
-    setNoteText(SYNTHETIC_DEMO_NOTE);
+    setActivePreset(preset.id);
+    setNoteText(preset.text);
     setSelectedFile(null);
     setImagePreview(null);
     setApiError(null);
@@ -66,6 +148,7 @@ export default function WorkbenchPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     setSelectedFile(file);
+    setActivePreset("");
     setApiError(null);
     setNetworkError(null);
 
@@ -80,6 +163,7 @@ export default function WorkbenchPage() {
 
   const handleClear = () => {
     setNoteText("");
+    setActivePreset("");
     setSelectedFile(null);
     setImagePreview(null);
     setApiError(null);
@@ -87,6 +171,20 @@ export default function WorkbenchPage() {
     setAnalysis(null);
     setHighlightedSegment(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleCopySegment = (segText: string, segId: string) => {
+    if (navigator?.clipboard) {
+      navigator.clipboard.writeText(segText);
+      setCopiedSegmentId(segId);
+      setTimeout(() => setCopiedSegmentId(null), 1800);
+    }
+  };
+
+  const handleOpenGuide = (tab: "overview" | "workbench" | "history" | "review" | "docs" | "safety") => {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("open-sanitas-guide", { detail: { tab } }));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -143,7 +241,7 @@ export default function WorkbenchPage() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Network error";
       setNetworkError(
-        `Unable to reach the Sanitas API at ${apiBaseUrl}. Ensure the backend is reachable. (${msg})`
+        `Unable to reach the Sanitas API at ${apiBaseUrl}. Ensure the backend service is running and CORS permits this origin. (${msg})`
       );
     } finally {
       setIsLoading(false);
@@ -155,6 +253,14 @@ export default function WorkbenchPage() {
 
   return (
     <main className="main-container">
+      {/* Context-aware Page Guide Banner */}
+      <PageGuideBanner
+        pageKey="workbench"
+        title="Clinical Workbench"
+        description="Select a synthetic case preset or ingest documents (Plain Text, Digital PDF, Image Scan) to perform deterministic evidence verification and review synthesis."
+        onOpenGuide={handleOpenGuide}
+      />
+
       {/* Error Alert Box */}
       {apiError && (
         <div className="error-box-neo" role="alert">
@@ -165,17 +271,17 @@ export default function WorkbenchPage() {
           <p className="error-msg">{apiError.message}</p>
           {apiError.suggestion && (
             <p className="error-suggestion">
-              <strong>Suggestion:</strong> {apiError.suggestion}
+              <strong>Actionable Suggestion:</strong> {apiError.suggestion}
             </p>
           )}
-          <div className="error-id">Correlation ID: {apiError.correlation_id}</div>
+          <div className="error-id">Tracking Correlation ID: {apiError.correlation_id}</div>
         </div>
       )}
 
       {networkError && (
         <div className="error-box-neo" role="alert">
           <div className="error-header">
-            <span>Backend Connectivity Error</span>
+            <span>Backend Connectivity Notice</span>
           </div>
           <p className="error-msg">{networkError}</p>
         </div>
@@ -185,216 +291,291 @@ export default function WorkbenchPage() {
       <div className="workbench-grid">
         {/* LEFT COLUMN: Document Input or Source Inspection */}
         <section className="card-neo" aria-label="Input Clinical Document and Canonical Source">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
             <div>
               <span className="badge-neo badge-neo-scope2">
-                {analysis ? "Source Document" : "Document Ingestion"}
+                {analysis ? "Source Document" : "Multi-Modal Ingestion"}
               </span>
               <h2 style={{ fontSize: "1.3rem", marginTop: "6px" }}>
-                {analysis ? "Canonical Segments" : "Submit Clinical Document"}
+                {analysis ? "Canonical Segments" : "Clinical Document Intake"}
               </h2>
             </div>
-            {!analysis && (
-              <button
-                type="button"
-                className="btn-neo btn-neo-sm btn-neo-accent"
-                onClick={handleLoadTextDemo}
-                disabled={isLoading}
-              >
-                Load Demo Note
-              </button>
-            )}
             {analysis && (
               <button
                 type="button"
                 className="btn-neo btn-neo-sm btn-neo-secondary"
                 onClick={() => setAnalysis(null)}
               >
-                New Review
+                + New Document Review
               </button>
             )}
           </div>
 
           {!analysis ? (
-            <form onSubmit={handleSubmit}>
-              {/* Input Mode Selector Tabs */}
-              <div className="input-mode-tabs">
-                <button
-                  type="button"
-                  className={`input-tab ${inputMode === "text" ? "active" : ""}`}
-                  onClick={() => {
-                    setInputMode("text");
-                    setSelectedFile(null);
-                  }}
-                >
-                  Plain Text
-                </button>
-                <button
-                  type="button"
-                  className={`input-tab ${inputMode === "pdf" ? "active" : ""}`}
-                  onClick={() => {
-                    setInputMode("pdf");
-                    setNoteText("");
-                  }}
-                >
-                  PDF Document
-                </button>
-                <button
-                  type="button"
-                  className={`input-tab ${inputMode === "image" ? "active" : ""}`}
-                  onClick={() => {
-                    setInputMode("image");
-                    setNoteText("");
-                  }}
-                >
-                  Medical Image Scan
-                </button>
+            <div>
+              {/* Synthetic Presets Selector */}
+              <div style={{ marginBottom: "14px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                  <span style={{ fontSize: "0.8rem", fontWeight: 800, color: "var(--primary-dark)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                    Synthetic Clinical Encounters:
+                  </span>
+                  <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
+                    Click to load benchmark test cases
+                  </span>
+                </div>
+                <div className="sample-presets-bar">
+                  {DEMO_PRESETS.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      className={`sample-preset-btn ${activePreset === p.id ? "active" : ""}`}
+                      onClick={() => handleSelectPreset(p)}
+                      title={p.description}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              {/* Mode 1: Plain Text */}
-              {inputMode === "text" && (
-                <div className="textarea-wrapper">
-                  <textarea
-                    id="clinical-note-input"
-                    className="note-textarea"
-                    placeholder="Enter or paste synthetic clinical note text here..."
-                    value={noteText}
-                    onChange={(e) => setNoteText(e.target.value)}
-                    disabled={isLoading}
-                  />
-                  <div className="char-counter">
-                    <span style={{ color: isOverLimit ? "#E63946" : "var(--text-muted)" }}>
-                      {charCount.toLocaleString()} / {MAX_TEXT_CHARS.toLocaleString()} chars
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* Mode 2: PDF Document Upload */}
-              {inputMode === "pdf" && (
-                <div>
-                  <div
-                    className="dropzone-box"
-                    onClick={() => fileInputRef.current?.click()}
+              <form onSubmit={handleSubmit}>
+                {/* Input Mode Selector Tabs */}
+                <div className="tab-bar-neo" role="tablist">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={inputMode === "text"}
+                    className={`tab-btn-neo ${inputMode === "text" ? "active" : ""}`}
+                    onClick={() => {
+                      setInputMode("text");
+                      setApiError(null);
+                    }}
                   >
-                    <div style={{ fontSize: "2rem", marginBottom: "8px" }}>📄</div>
-                    <div className="dropzone-title">
-                      {selectedFile ? selectedFile.name : "Select or Drop a Clinical PDF"}
-                    </div>
-                    <div className="dropzone-sub">
-                      Supports Digital or Scanned PDFs (up to 15 pages, max 10 MB)
-                    </div>
-                    {selectedFile && (
-                      <div style={{ marginTop: "12px" }}>
-                        <span className="badge-neo badge-neo-scope1">
-                          {(selectedFile.size / 1024).toFixed(1)} KB
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="application/pdf"
-                    style={{ display: "none" }}
-                    onChange={handleFileChange}
-                  />
-                </div>
-              )}
-
-              {/* Mode 3: Medical Image Scan */}
-              {inputMode === "image" && (
-                <div>
-                  <div
-                    className="dropzone-box"
-                    onClick={() => fileInputRef.current?.click()}
+                    Plain Text Note
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={inputMode === "pdf"}
+                    className={`tab-btn-neo ${inputMode === "pdf" ? "active" : ""}`}
+                    onClick={() => {
+                      setInputMode("pdf");
+                      setApiError(null);
+                    }}
                   >
-                    <div style={{ fontSize: "2rem", marginBottom: "8px" }}>🖼️</div>
-                    <div className="dropzone-title">
-                      {selectedFile ? selectedFile.name : "Select or Drop a Document Image"}
-                    </div>
-                    <div className="dropzone-sub">
-                      Supports JPEG / PNG document scans &amp; photographs (max 10 MB)
-                    </div>
-                    {selectedFile && (
-                      <div style={{ marginTop: "12px" }}>
-                        <span className="badge-neo badge-neo-scope1">
-                          {(selectedFile.size / 1024).toFixed(1)} KB
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  {imagePreview && (
-                    <div style={{ marginBottom: "16px", textAlign: "center" }}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={imagePreview}
-                        alt="Document Preview"
+                    Digital PDF Document
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={inputMode === "image"}
+                    className={`tab-btn-neo ${inputMode === "image" ? "active" : ""}`}
+                    onClick={() => {
+                      setInputMode("image");
+                      setApiError(null);
+                    }}
+                  >
+                    Document Scan / Photo
+                  </button>
+                </div>
+
+                {/* TAB 1: PLAIN TEXT */}
+                {inputMode === "text" && (
+                  <div style={{ marginBottom: "16px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                      <label htmlFor="clinical-note-input" style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--primary-dark)" }}>
+                        Synthetic Clinical Text
+                      </label>
+                      <span
                         style={{
-                          maxWidth: "100%",
-                          maxHeight: "220px",
-                          border: "var(--ui-border)",
-                          borderRadius: "8px",
-                          boxShadow: "2px 2px 0 var(--border-color)",
+                          fontSize: "0.78rem",
+                          fontWeight: 700,
+                          color: isOverLimit ? "var(--alert-red)" : "var(--text-muted)",
                         }}
-                      />
+                      >
+                        {charCount.toLocaleString()} / {MAX_TEXT_CHARS.toLocaleString()} characters
+                      </span>
                     </div>
-                  )}
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/png, image/jpeg"
-                    style={{ display: "none" }}
-                    onChange={handleFileChange}
-                  />
-                </div>
-              )}
+                    <textarea
+                      id="clinical-note-input"
+                      className="textarea-neo"
+                      value={noteText}
+                      onChange={(e) => {
+                        setNoteText(e.target.value);
+                        setActivePreset("");
+                      }}
+                      placeholder="Paste synthetic clinical document text here (demographics, symptoms, diagnoses, medications, vitals, allergies)..."
+                      rows={14}
+                      disabled={isLoading}
+                      required
+                    />
+                  </div>
+                )}
 
-              {/* Action Buttons */}
-              <div style={{ display: "flex", gap: "10px", marginTop: "12px" }}>
-                <button
-                  type="submit"
-                  className="btn-neo btn-neo-primary"
-                  disabled={
-                    isLoading ||
-                    (inputMode === "text" && (!noteText.trim() || isOverLimit)) ||
-                    (inputMode !== "text" && !selectedFile)
-                  }
-                >
-                  {isLoading ? "Running Review Pipeline..." : "Review Clinical Document"}
-                </button>
-                <button
-                  type="button"
-                  className="btn-neo btn-neo-ghost"
-                  onClick={handleClear}
-                  disabled={isLoading || (!noteText && !selectedFile && !apiError && !networkError)}
-                >
-                  Clear
-                </button>
-              </div>
-            </form>
+                {/* TAB 2: DIGITAL PDF */}
+                {inputMode === "pdf" && (
+                  <div style={{ marginBottom: "16px" }}>
+                    <div
+                      className="dropzone-neo"
+                      onClick={() => fileInputRef.current?.click()}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const file = e.dataTransfer.files?.[0];
+                        if (file && file.type === "application/pdf") {
+                          setSelectedFile(file);
+                          setActivePreset("");
+                          setApiError(null);
+                        }
+                      }}
+                    >
+                      <div className="dropzone-icon">📄</div>
+                      <div className="dropzone-title">
+                        {selectedFile ? selectedFile.name : "Click to select or drag & drop a PDF document"}
+                      </div>
+                      <div className="dropzone-sub">
+                        Supports digital &amp; scanned PDF clinical records (max 10 MB, up to 15 pages)
+                      </div>
+                      {selectedFile && (
+                        <div style={{ marginTop: "12px" }}>
+                          <span className="badge-neo badge-neo-scope1">
+                            {(selectedFile.size / 1024).toFixed(1)} KB
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="application/pdf"
+                      style={{ display: "none" }}
+                      onChange={handleFileChange}
+                    />
+                  </div>
+                )}
+
+                {/* TAB 3: IMAGE SCAN */}
+                {inputMode === "image" && (
+                  <div style={{ marginBottom: "16px" }}>
+                    <div
+                      className="dropzone-neo"
+                      onClick={() => fileInputRef.current?.click()}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const file = e.dataTransfer.files?.[0];
+                        if (file && file.type.startsWith("image/")) {
+                          setSelectedFile(file);
+                          setActivePreset("");
+                          setApiError(null);
+                          const reader = new FileReader();
+                          reader.onload = () => setImagePreview(reader.result as string);
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    >
+                      <div className="dropzone-icon">📷</div>
+                      <div className="dropzone-title">
+                        {selectedFile ? selectedFile.name : "Click to select or drop a document image scan"}
+                      </div>
+                      <div className="dropzone-sub">
+                        Supports JPEG / PNG document scans &amp; photographs (max 10 MB)
+                      </div>
+                      {selectedFile && (
+                        <div style={{ marginTop: "12px" }}>
+                          <span className="badge-neo badge-neo-scope1">
+                            {(selectedFile.size / 1024).toFixed(1)} KB
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    {imagePreview && (
+                      <div style={{ marginBottom: "16px", textAlign: "center" }}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={imagePreview}
+                          alt="Document Preview"
+                          style={{
+                            maxWidth: "100%",
+                            maxHeight: "220px",
+                            border: "var(--ui-border)",
+                            borderRadius: "8px",
+                            boxShadow: "2px 2px 0 var(--border-color)",
+                          }}
+                        />
+                      </div>
+                    )}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/png, image/jpeg"
+                      style={{ display: "none" }}
+                      onChange={handleFileChange}
+                    />
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+                  <button
+                    type="button"
+                    className="btn-neo btn-neo-secondary"
+                    onClick={handleClear}
+                    disabled={isLoading}
+                  >
+                    Clear Form
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn-neo btn-neo-primary"
+                    disabled={isLoading || isOverLimit || (inputMode === "text" ? !noteText.trim() : !selectedFile)}
+                  >
+                    {isLoading ? "Running Review Pipeline..." : "Run Evidence-Linked Review \u2192"}
+                  </button>
+                </div>
+              </form>
+            </div>
           ) : (
-            /* Canonical Source Segments Inspection Viewer */
+            /* CANONICAL SOURCE SEGMENTS DRAWER */
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-                <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--text-muted)" }}>
-                  Verified Segments ({analysis.canonical_document.segments.length})
-                </span>
-                <span className="badge-neo">
-                  Route: {analysis.source?.source_type || analysis.canonical_document.source_type}
-                </span>
+                <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", margin: 0 }}>
+                  Showing {analysis.canonical_document.segments?.length || 0} immutable source segments. Click on evidence pills in findings to highlight matching lines.
+                </p>
+                {highlightedSegment && (
+                  <button
+                    type="button"
+                    className="btn-neo btn-neo-xs btn-neo-secondary"
+                    onClick={() => setHighlightedSegment(null)}
+                  >
+                    Clear Highlight
+                  </button>
+                )}
               </div>
+
               <div className="segments-list">
-                {analysis.canonical_document.segments.map((seg) => {
-                  const isActive = highlightedSegment === seg.segment_id;
+                {analysis.canonical_document.segments?.map((seg) => {
+                  const isHighlighted = highlightedSegment === seg.segment_id;
                   return (
                     <div
                       key={seg.segment_id}
-                      id={seg.segment_id}
-                      className={`segment-box ${isActive ? "active-evidence" : ""}`}
+                      id={`segment-${seg.segment_id}`}
+                      className={`segment-box ${isHighlighted ? "active-evidence" : ""}`}
                     >
-                      <span className="segment-id-tag">{seg.segment_id}</span>
-                      <span>{seg.text}</span>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                        <span className="segment-id-tag">
+                          {seg.segment_id} {isHighlighted && "★ EVIDENCE MATCH"}
+                        </span>
+                        <button
+                          type="button"
+                          className="btn-neo btn-neo-xs btn-neo-secondary"
+                          style={{ fontSize: "0.68rem", padding: "2px 6px" }}
+                          onClick={() => handleCopySegment(seg.text, seg.segment_id)}
+                        >
+                          {copiedSegmentId === seg.segment_id ? "✓ Copied" : "Copy"}
+                        </button>
+                      </div>
+                      <div>{seg.text}</div>
                     </div>
                   );
                 })}
@@ -403,39 +584,75 @@ export default function WorkbenchPage() {
           )}
         </section>
 
-        {/* RIGHT COLUMN: Results or Empty / Loading State */}
-        <section aria-label="Review Results and Findings">
+        {/* RIGHT COLUMN: Review Results, Progress, or Clinical Guidance */}
+        <section aria-label="Clinical Findings and Grounded Evidence">
           {isLoading && (
-            <div className="card-neo spinner-box">
+            <div className="pipeline-progress-tracker">
               <div className="spinner-neo" aria-hidden="true" />
-              <h3 style={{ margin: "0 0 8px" }}>Executing Two-Pass Clinical Review</h3>
-              <p style={{ color: "var(--text-muted)", fontSize: "0.88rem", maxWidth: "420px", margin: "0 auto" }}>
-                Ingesting document, routing modality, extracting structured facts with evidence grounding, detecting contradictions, and synthesizing reviewer findings.
+              <h3 style={{ textAlign: "center", margin: "0 0 6px", color: "var(--primary-dark)" }}>
+                Executing 7-Stage Clinical Review Pipeline
+              </h3>
+              <p style={{ textAlign: "center", fontSize: "0.85rem", color: "var(--text-muted)", margin: 0 }}>
+                Synthesizing findings through Gemini and deterministically verifying source evidence quotes against canonical segments.
               </p>
+
+              <div className="tracker-stages-list">
+                <div className="tracker-stage-item active">
+                  <span className="tracker-badge-num">P1-2</span>
+                  <div style={{ fontSize: "0.8rem", fontWeight: 700 }}>Canonical Intake</div>
+                </div>
+                <div className="tracker-stage-item active">
+                  <span className="tracker-badge-num">P3</span>
+                  <div style={{ fontSize: "0.8rem", fontWeight: 700 }}>Fact Extraction</div>
+                </div>
+                <div className="tracker-stage-item active">
+                  <span className="tracker-badge-num">P4-5</span>
+                  <div style={{ fontSize: "0.8rem", fontWeight: 700 }}>Evidence Gate</div>
+                </div>
+                <div className="tracker-stage-item active">
+                  <span className="tracker-badge-num">P6-7</span>
+                  <div style={{ fontSize: "0.8rem", fontWeight: 700 }}>Review Synthesis</div>
+                </div>
+              </div>
             </div>
           )}
 
           {!isLoading && !analysis && (
-            <div className="card-neo" style={{ textAlign: "center", padding: "60px 24px" }}>
-              <div style={{ fontSize: "2.4rem", marginBottom: "12px" }}>🩺</div>
-              <h3 style={{ margin: "0 0 8px" }}>Awaiting Document Submission</h3>
-              <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", maxWidth: "400px", margin: "0 auto 20px" }}>
-                Enter synthetic note text, upload a clinical PDF, or attach an image scan on the left.
+            <div className="card-neo empty-state-box">
+              <div className="empty-state-icon">🛡️</div>
+              <h3 className="empty-state-title">Awaiting Clinical Document Submission</h3>
+              <p className="empty-state-text">
+                Submit a synthetic clinical note, digital PDF, or scanned document using the intake panel on the left. The Sanitas pipeline will extract structured entities, verify evidence quotes, check factual contradictions, and persist results to PostgreSQL.
               </p>
-              <button
-                type="button"
-                className="btn-neo btn-neo-accent"
-                onClick={handleLoadTextDemo}
-              >
-                Try Synthetic Demonstration
-              </button>
+              <div style={{ display: "flex", gap: "10px", justifyContent: "center", marginTop: "16px" }}>
+                <button
+                  type="button"
+                  className="btn-neo btn-neo-sm btn-neo-primary"
+                  onClick={() => handleSelectPreset(DEMO_PRESETS[0])}
+                >
+                  Load Elena Rostova Sample
+                </button>
+                <button
+                  type="button"
+                  className="btn-neo btn-neo-sm btn-neo-secondary"
+                  onClick={() => handleOpenGuide("workbench")}
+                >
+                  📖 View Workbench Guide
+                </button>
+              </div>
             </div>
           )}
 
           {!isLoading && analysis && (
             <ReviewReportView
               analysis={analysis}
-              onHighlightSegment={setHighlightedSegment}
+              onSelectSegment={(segId) => {
+                setHighlightedSegment(segId);
+                const el = document.getElementById(`segment-${segId}`);
+                if (el) {
+                  el.scrollIntoView({ behavior: "smooth", block: "center" });
+                }
+              }}
             />
           )}
         </section>

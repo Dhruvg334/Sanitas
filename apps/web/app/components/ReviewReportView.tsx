@@ -202,17 +202,24 @@ export interface AnalysisResponse {
   processing: Processing;
 }
 
-interface ReviewReportViewProps {
+export interface ReviewReportViewProps {
   analysis: AnalysisResponse;
-  onHighlightSegment: (segmentId: string | null) => void;
+  onHighlightSegment?: (segmentId: string | null) => void;
+  onSelectSegment?: (segmentId: string) => void;
 }
 
 export default function ReviewReportView({
   analysis,
   onHighlightSegment,
+  onSelectSegment,
 }: ReviewReportViewProps) {
   const [expandedEvidence, setExpandedEvidence] = useState<Record<string, boolean>>({});
   const [activeTab, setActiveTab] = useState<"findings" | "extraction" | "telemetry">("findings");
+
+  const handleHighlight = (segmentId: string | null) => {
+    if (onHighlightSegment) onHighlightSegment(segmentId);
+    if (onSelectSegment && segmentId) onSelectSegment(segmentId);
+  };
 
   const toggleEvidence = (id: string) => {
     setExpandedEvidence((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -326,7 +333,7 @@ export default function ReviewReportView({
                         evidence={incon.evidence}
                         isExpanded={!!expandedEvidence[incon.finding_id]}
                         onToggle={() => toggleEvidence(incon.finding_id)}
-                        onHighlight={onHighlightSegment}
+                        onHighlight={handleHighlight}
                       />
                     </div>
                   ))}
@@ -360,7 +367,7 @@ export default function ReviewReportView({
                         evidence={concern.evidence}
                         isExpanded={!!expandedEvidence[concern.finding_id]}
                         onToggle={() => toggleEvidence(concern.finding_id)}
-                        onHighlight={onHighlightSegment}
+                        onHighlight={handleHighlight}
                       />
                     </div>
                   ))}
@@ -422,7 +429,7 @@ export default function ReviewReportView({
                           evidence={item.evidence}
                           isExpanded={!!expandedEvidence[item.finding_id]}
                           onToggle={() => toggleEvidence(item.finding_id)}
-                          onHighlight={onHighlightSegment}
+                          onHighlight={handleHighlight}
                         />
                       )}
                     </div>
@@ -455,7 +462,7 @@ export default function ReviewReportView({
                       evidence={extraction.patient_information.name.evidence}
                       isExpanded={!!expandedEvidence["pat-name"]}
                       onToggle={() => toggleEvidence("pat-name")}
-                      onHighlight={onHighlightSegment}
+                      onHighlight={handleHighlight}
                     />
                   )}
                 </div>
@@ -472,7 +479,7 @@ export default function ReviewReportView({
                       evidence={extraction.patient_information.age.evidence}
                       isExpanded={!!expandedEvidence["pat-age"]}
                       onToggle={() => toggleEvidence("pat-age")}
-                      onHighlight={onHighlightSegment}
+                      onHighlight={handleHighlight}
                     />
                   )}
                 </div>
@@ -523,7 +530,7 @@ export default function ReviewReportView({
                         evidence={dx.evidence}
                         isExpanded={!!expandedEvidence[dx.entity_id]}
                         onToggle={() => toggleEvidence(dx.entity_id)}
-                        onHighlight={onHighlightSegment}
+                        onHighlight={handleHighlight}
                       />
                     </div>
                   ))}
@@ -561,7 +568,7 @@ export default function ReviewReportView({
                         evidence={sym.evidence}
                         isExpanded={!!expandedEvidence[sym.entity_id]}
                         onToggle={() => toggleEvidence(sym.entity_id)}
-                        onHighlight={onHighlightSegment}
+                        onHighlight={handleHighlight}
                       />
                     </div>
                   ))}
@@ -603,7 +610,7 @@ export default function ReviewReportView({
                         evidence={med.evidence}
                         isExpanded={!!expandedEvidence[med.entity_id]}
                         onToggle={() => toggleEvidence(med.entity_id)}
-                        onHighlight={onHighlightSegment}
+                        onHighlight={handleHighlight}
                       />
                     </div>
                   ))}
@@ -641,7 +648,7 @@ export default function ReviewReportView({
                         evidence={v.evidence}
                         isExpanded={!!expandedEvidence[v.entity_id]}
                         onToggle={() => toggleEvidence(v.entity_id)}
-                        onHighlight={onHighlightSegment}
+                        onHighlight={handleHighlight}
                       />
                     </div>
                   ))}
@@ -681,7 +688,7 @@ export default function ReviewReportView({
                         evidence={alg.evidence}
                         isExpanded={!!expandedEvidence[alg.entity_id]}
                         onToggle={() => toggleEvidence(alg.entity_id)}
-                        onHighlight={onHighlightSegment}
+                        onHighlight={handleHighlight}
                       />
                     </div>
                   ))}

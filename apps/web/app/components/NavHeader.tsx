@@ -1,15 +1,52 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import UserGuideModal from "./UserGuideModal";
 
 export default function NavHeader() {
   const pathname = usePathname();
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [guideTab, setGuideTab] = useState<"overview" | "workbench" | "history" | "review" | "docs" | "safety">("overview");
 
   const isCurrent = (path: string) => {
     if (path === "/" && pathname === "/") return true;
     if (path !== "/" && pathname?.startsWith(path)) return true;
     return false;
+  };
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout | null = null;
+    try {
+      const dismissed = localStorage.getItem("sanitas_guide_dismissed");
+      if (!dismissed) {
+        timer = setTimeout(() => {
+          setGuideOpen(true);
+        }, 300);
+      }
+    } catch {
+      // Ignore storage errors in restricted contexts
+    }
+
+    const handleOpenEvent = (e: Event) => {
+      const custom = e as CustomEvent<{ tab?: "overview" | "workbench" | "history" | "review" | "docs" | "safety" }>;
+      if (custom.detail?.tab) {
+        setGuideTab(custom.detail.tab);
+      }
+      setGuideOpen(true);
+    };
+
+    window.addEventListener("open-sanitas-guide", handleOpenEvent);
+    return () => {
+      if (timer) clearTimeout(timer);
+      window.removeEventListener("open-sanitas-guide", handleOpenEvent);
+    };
+  }, []);
+
+  const openGuide = (tab: "overview" | "workbench" | "history" | "review" | "docs" | "safety" = "overview") => {
+    setGuideTab(tab);
+    setGuideOpen(true);
   };
 
   return (
@@ -51,7 +88,16 @@ export default function NavHeader() {
             </Link>
           </nav>
 
-          <div className="header-badge-container">
+          <div className="header-badge-container" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <button
+              type="button"
+              className="btn-neo btn-neo-xs btn-neo-secondary"
+              onClick={() => openGuide("overview")}
+              title="Open Sanitas Operational User Manual"
+              style={{ fontWeight: 800 }}
+            >
+              📖 User Guide
+            </button>
             <span className="badge-neo badge-neo-status">
               <span className="status-live-dot" /> Synthetic Mode
             </span>
@@ -63,6 +109,14 @@ export default function NavHeader() {
       <div className="disclaimer-banner" role="note">
         <strong>Synthetic Clinical Data Only:</strong> Sanitas is designed and deployed strictly for demonstration and evaluation on synthetic clinical documents. Never enter real Protected Health Information (PHI).
       </div>
+
+      {guideOpen && (
+        <UserGuideModal
+          isOpen={guideOpen}
+          onClose={() => setGuideOpen(false)}
+          initialTab={guideTab}
+        />
+      )}
     </>
   );
 }

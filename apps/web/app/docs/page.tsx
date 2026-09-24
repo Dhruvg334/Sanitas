@@ -2,22 +2,22 @@
 
 import { useState } from "react";
 import MermaidChart from "../components/MermaidChart";
+import PageGuideBanner from "../components/PageGuideBanner";
 
-const ARCHITECTURE_MERMAID = `flowchart TD
+const TOPOLOGY_DIAGRAM = `flowchart TD
     subgraph Client["Reviewer Client Interface"]
         UI["Next.js 16 Web Application<br/>(Hosted on Vercel)"]
     end
 
     subgraph Backend["Sanitas FastAPI Application Service<br/>(Hosted on Render)"]
-        Ingest["Stage P0: Input Ingestion & MIME Sniffer"]
-        Router["Stage P1: Adaptive Document Router"]
+        Ingest["Stage P1: Ingestion & Adaptive Router"]
         Canon["Stage P2: Canonical Document Builder"]
         Extract["Stage P3: Fact Extractor (Prompt E1.1)"]
         DetVal["Stage P4: Deterministic Evidence Gate"]
         InconRules["Stage P5: Contradiction Candidate Rules"]
         Synthesize["Stage P6: Review Synthesizer (Prompt R1.0)"]
         Gate["Stage P7: Final Quality Gate"]
-        Persist["Stage P8: Persistence Manager"]
+        Persist["Persistence Engine"]
     end
 
     subgraph AI["Upstream Foundation Model"]
@@ -29,9 +29,8 @@ const ARCHITECTURE_MERMAID = `flowchart TD
     end
 
     UI -->|"POST /analyses (multipart/JSON)"| Ingest
-    Ingest --> Router
-    Router --> Canon
-    Canon -->|"Canonical JSON"| Extract
+    Ingest --> Canon
+    Canon -->|"Canonical Segments JSON"| Extract
     Extract <-->|"Strict Schema Generation"| Gemini
     Extract --> DetVal
     DetVal -->|"Verified Facts"| InconRules
@@ -39,29 +38,74 @@ const ARCHITECTURE_MERMAID = `flowchart TD
     Synthesize <-->|"Review Synthesis"| Gemini
     Synthesize --> Gate
     Gate --> Persist
-    Persist -->|"Store Analysis Record"| NeonDB
+    Persist -->|"Store Analysis & Events"| NeonDB
     Persist -->|"Evidence-Linked Response"| UI
 `;
 
-const PIPELINE_FLOWCHART = `flowchart LR
+const PIPELINE_DIAGRAM = `flowchart LR
     A["Raw Input<br/>(Text / PDF / Image)"] --> B{"Adaptive Router"}
     B -->|"Plain Text"| C1["Deterministic Line<br/>Canonicalization"]
-    B -->|"Digital PDF (>=80% chars)"| C2["PyMuPDF Block & Line<br/>Reading-Order Extraction"]
-    B -->|"Scanned PDF / Image"| C3["Gemini Prompt V1.0<br/>Visual Transcription"]
+    B -->|"Digital PDF (>=80% text)"| C2["PyMuPDF Block & Line<br/>Reading-Order Extraction"]
+    B -->|"Scanned PDF / Image"| C3["Gemini Prompt V1.0<br/>Bounded Visual Transcription"]
 
     C1 --> D["Canonical Document<br/>(p{page}-s{seg} segments)"]
     C2 --> D
     C3 --> D
 
-    D --> E["Stage P3: Clinical Extraction<br/>(Gemini Prompt E1.1)"]
+    D --> E["Stage P3: Fact Extraction<br/>(Gemini Prompt E1.1)"]
     E --> F{"Stage P4: Evidence Gate<br/>Verbatim Quote Match"}
-    F -->|Pass| G["Stage P5: Contradiction Rules<br/>(Allergy / Med / Demographics)"]
+    F -->|Pass| G["Stage P5: Contradiction Rules<br/>(Allergy / Med / Vitals)"]
     F -->|Fail| Err["Fail Closed: 502<br/>EVIDENCE_VALIDATION_FAILED"]
 
     G --> H["Stage P6: Review Synthesis<br/>(Gemini Prompt R1.0)"]
-    H --> I{"Stage P7: Quality Gate<br/>Schema & Entity Cross-Ref"}
+    H --> I{"Stage P7: Quality Gate<br/>Schema & Anti-Directive Check"}
     I -->|Pass| J["Stage P8: Persistence<br/>(PostgreSQL + Telemetry)"]
     I -->|Fail| Err2["Fail Closed: 502<br/>REVIEW_QUALITY_GATE_FAILED"]
+`;
+
+const ROUTER_FLOWCHART = `flowchart TD
+    Start["Incoming Request<br/>(JSON or Multipart)"] --> Norm["Normalize into<br/>IngestedDocument Dataclass"]
+    Norm --> Sniff["MIME & Magic Header Inspection"]
+    Sniff --> Bounds{"Enforce Bounds<br/>(<=10MB, <=15 Pages, <=50k Chars)"}
+    Bounds -->|Exceeded| ErrBound["Reject: 413 TEXT_TOO_LARGE /<br/>400 UNSUPPORTED_INPUT"]
+    Bounds -->|Valid| Branch{"MIME Type Dispatch"}
+
+    Branch -->|"text/plain"| TextPath["Deterministic Canonicalizer<br/>(Line-by-line p1-sX)"]
+    Branch -->|"application/pdf"| PDFDensity{"PyMuPDF Text Density Check<br/>(>=80% Pages have Text?)"}
+    Branch -->|"image/jpeg or png"| ImgClamp["Clamp Max Dimension 1600px<br/>(LANCZOS Antialiasing)"]
+
+    PDFDensity -->|"Yes (Digital PDF)"| DigitalPDF["PyMuPDF Reading-Order<br/>Text Block Parsing"]
+    PDFDensity -->|"No (Scanned PDF)"| PDFRender["Render Pages at 150 DPI<br/>(Memory Bounded)"]
+
+    PDFRender --> Vision["Gemini Vision Prompt V1.0<br/>Optical Transcription"]
+    ImgClamp --> Vision
+    DigitalPDF --> Canon["Construct Immutable<br/>CanonicalDocument"]
+    TextPath --> Canon
+    Vision --> Canon
+`;
+
+const TWOPASS_DIAGRAM = `flowchart TD
+    subgraph Pass1["Pass 1: Pure Fact Extraction"]
+        P1Input["Canonical Document Segments"] --> P1Prompt["System Prompt E1.1<br/>Role: Pure Data Extraction Specialist"]
+        P1Prompt --> P1Call["Gemini API Call<br/>(temperature: 0.0)"]
+        P1Call --> P1Schema["Strict ClinicalExtraction JSON<br/>(Demographics, Symptoms, Meds, Vitals, Allergies)"]
+        P1Schema --> P1Evidence["At Least One EvidenceRef<br/>per Documented Entity"]
+    end
+
+    subgraph InterStage["Deterministic Middle Layer (Stage P4 & P5)"]
+        P1Evidence --> P4Gate["Stage P4: Quote Substring Verification<br/>(Normalized Whitespace Matching)"]
+        P4Gate --> P5Rules["Stage P5: Contradiction Engine<br/>- NKDA vs Specific Allergy<br/>- Active vs Discontinued Meds<br/>- Vitals Timestamp Conflicts"]
+    end
+
+    subgraph Pass2["Pass 2: Review Synthesis & Governance"]
+        P5Rules --> P2Prompt["System Prompt R1.0<br/>Role: Clinical Documentation Reviewer"]
+        P2Prompt --> P2Call["Gemini API Call<br/>(temperature: 0.0)"]
+        P2Call --> P2Schema["ClinicalReview JSON<br/>(Summary, Concerns, Missing Info, Items to Review)"]
+        P2Schema --> P7Gate["Stage P7: Quality Gate<br/>- Entity ID Cross-Referencing<br/>- Evidence Quote Grounding<br/>- Anti-Directive Regex Check"]
+    end
+
+    Pass1 --> InterStage
+    InterStage --> Pass2
 `;
 
 const EVIDENCE_SEQUENCE = `sequenceDiagram
@@ -74,7 +118,7 @@ const EVIDENCE_SEQUENCE = `sequenceDiagram
     participant DB as Neon PostgreSQL
 
     Reviewer->>API: POST /analyses (Document File or Note Text)
-    API->>Router: Validate MIME, size bounds & classify route
+    API->>Router: Normalize & validate MIME, size bounds & classify route
     alt Plain text or Digital PDF
         Router->>API: Generate Canonical Document deterministically
     else Scanned PDF or Image
@@ -97,19 +141,33 @@ const EVIDENCE_SEQUENCE = `sequenceDiagram
 
 export default function DocsPage() {
   const [activeTab, setActiveTab] = useState<
-    "architecture" | "pipeline" | "evidence" | "errors" | "evaluation" | "api"
+    "architecture" | "pipeline" | "router" | "twopass" | "evidence" | "persistence" | "evaluation" | "api"
   >("architecture");
 
+  const handleOpenGuide = (tab: "overview" | "workbench" | "history" | "review" | "docs" | "safety") => {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("open-sanitas-guide", { detail: { tab } }));
+    }
+  };
+
   return (
-    <main className="docs-container" style={{ maxWidth: "1200px", margin: "32px auto 80px", padding: "0 24px" }}>
+    <main className="docs-container" style={{ maxWidth: "1240px", margin: "24px auto 80px", padding: "0 24px" }}>
+      {/* Page Guide Banner */}
+      <PageGuideBanner
+        pageKey="docs"
+        title="Technical Documentation"
+        description="Comprehensive architectural specifications, two-pass pipeline mechanics, deterministic evidence verification math, and REST API contracts for Sanitas."
+        onOpenGuide={handleOpenGuide}
+      />
+
       {/* Title Header */}
-      <div style={{ textAlign: "center", marginBottom: "32px" }}>
+      <div style={{ textAlign: "center", marginBottom: "28px" }}>
         <span className="badge-neo badge-neo-scope2">Engineering &amp; System Specification</span>
-        <h1 style={{ fontSize: "2.6rem", marginTop: "8px", marginBottom: "8px" }}>
+        <h1 style={{ fontSize: "2.5rem", marginTop: "8px", marginBottom: "8px" }}>
           Platform Technical Documentation
         </h1>
-        <p style={{ color: "var(--text-muted)", maxWidth: "700px", margin: "0 auto", fontSize: "0.95rem" }}>
-          Comprehensive architectural specifications, two-pass pipeline mechanics, deterministic evidence verification math, and REST API contracts for Sanitas.
+        <p style={{ color: "var(--text-muted)", maxWidth: "780px", margin: "0 auto", fontSize: "0.95rem" }}>
+          Exhaustive architectural rationale, two-pass pipeline mechanics, deterministic evidence verification algorithms, persistence design, and REST API contracts for Sanitas.
         </p>
       </div>
 
@@ -121,129 +179,183 @@ export default function DocsPage() {
             className={`tab-btn ${activeTab === "architecture" ? "active" : ""}`}
             onClick={() => setActiveTab("architecture")}
           >
-            System Architecture
+            1. Topology &amp; Hosting
           </button>
           <button
             type="button"
             className={`tab-btn ${activeTab === "pipeline" ? "active" : ""}`}
             onClick={() => setActiveTab("pipeline")}
           >
-            Two-Pass Pipeline (P0-P8)
+            2. 7-Stage Pipeline
+          </button>
+          <button
+            type="button"
+            className={`tab-btn ${activeTab === "router" ? "active" : ""}`}
+            onClick={() => setActiveTab("router")}
+          >
+            3. Ingestion &amp; Memory
+          </button>
+          <button
+            type="button"
+            className={`tab-btn ${activeTab === "twopass" ? "active" : ""}`}
+            onClick={() => setActiveTab("twopass")}
+          >
+            4. Two-Pass AI &amp; Prompts
           </button>
           <button
             type="button"
             className={`tab-btn ${activeTab === "evidence" ? "active" : ""}`}
             onClick={() => setActiveTab("evidence")}
           >
-            Evidence Grounding
+            5. Evidence &amp; Contradictions
           </button>
           <button
             type="button"
-            className={`tab-btn ${activeTab === "errors" ? "active" : ""}`}
-            onClick={() => setActiveTab("errors")}
+            className={`tab-btn ${activeTab === "persistence" ? "active" : ""}`}
+            onClick={() => setActiveTab("persistence")}
           >
-            Reliability &amp; Error Taxonomy
+            6. Persistence &amp; Schema
           </button>
           <button
             type="button"
             className={`tab-btn ${activeTab === "evaluation" ? "active" : ""}`}
             onClick={() => setActiveTab("evaluation")}
           >
-            Evaluation Methodology
+            7. Evaluation &amp; Safety
           </button>
           <button
             type="button"
             className={`tab-btn ${activeTab === "api" ? "active" : ""}`}
             onClick={() => setActiveTab("api")}
           >
-            REST API Reference
+            8. REST API Reference
           </button>
         </nav>
       </div>
 
-      {/* TAB 1: SYSTEM ARCHITECTURE */}
+      {/* TAB 1: SYSTEM ARCHITECTURE & TOPOLOGY */}
       {activeTab === "architecture" && (
         <div>
-          <div className="card-neo" style={{ marginBottom: "24px" }}>
-            <span className="badge-neo badge-neo-scope1">Topology Overview</span>
-            <h2 style={{ margin: "10px 0 14px" }}>Multi-Tier Deployment Architecture</h2>
-            <p style={{ color: "var(--text-dark)", lineHeight: 1.6, fontSize: "0.92rem" }}>
-              Sanitas is architected as an independent, decoupled modern clinical reviewer. The frontend runs as a static/edge Next.js 16 application on Vercel, interacting with a dedicated FastAPI Python service deployed on Render. State persistence is managed through Neon Serverless PostgreSQL with schema migrations strictly versioned in Alembic.
+          <div className="card-neo">
+            <span className="badge-neo badge-neo-scope1">Architectural Topology</span>
+            <h2 style={{ margin: "10px 0 14px" }}>System Architecture &amp; Hosting Rationales</h2>
+            <p style={{ color: "var(--text-muted)", fontSize: "0.92rem", lineHeight: 1.6 }}>
+              Sanitas implements an enterprise multi-tier architecture separating the user presentation layer, long-lived clinical document processing microservices, serverless relational persistence, and structured foundation model reasoning.
             </p>
 
-            <MermaidChart chart={ARCHITECTURE_MERMAID} />
+            <div className="mermaid-wrapper">
+              <MermaidChart chart={TOPOLOGY_DIAGRAM} />
+            </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "16px", marginTop: "20px" }}>
-              <div style={{ background: "var(--mint-light)", border: "var(--ui-border)", borderRadius: "8px", padding: "16px" }}>
-                <h4 style={{ color: "var(--emerald)", marginBottom: "6px" }}>Vercel Web Frontend</h4>
-                <p style={{ fontSize: "0.84rem", color: "var(--text-muted)" }}>
-                  Next.js 16 App Router interface utilizing the high-contrast Carbonly design system. Durable routes (`/`, `/history`, `/review/[id]`) survive browser refreshes by pulling persisted reviews.
-                </p>
-              </div>
-
-              <div style={{ background: "var(--mint-light)", border: "var(--ui-border)", borderRadius: "8px", padding: "16px" }}>
-                <h4 style={{ color: "var(--emerald)", marginBottom: "6px" }}>Render FastAPI Service</h4>
-                <p style={{ fontSize: "0.84rem", color: "var(--text-muted)" }}>
-                  Python 3.12 Web Service running Uvicorn. Implements adaptive document classification, PyMuPDF block parsing, Pillow EXIF normalization, and deterministic verification gates.
-                </p>
-              </div>
-
-              <div style={{ background: "var(--mint-light)", border: "var(--ui-border)", borderRadius: "8px", padding: "16px" }}>
-                <h4 style={{ color: "var(--emerald)", marginBottom: "6px" }}>Neon Serverless PostgreSQL</h4>
-                <p style={{ fontSize: "0.84rem", color: "var(--text-muted)" }}>
-                  Stores analysis records (`analyses`) and telemetry (`processing_events`). Uses JSONB for structured schemas. Raw uploaded file bytes are never stored to guarantee privacy.
-                </p>
+            <div style={{ marginTop: "24px" }}>
+              <h3 style={{ color: "var(--primary-dark)", marginBottom: "12px" }}>Platform Hosting Decision Matrix</h3>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.86rem" }}>
+                  <thead>
+                    <tr style={{ background: "var(--mint-light)", borderBottom: "2px solid var(--border-color)" }}>
+                      <th style={{ padding: "10px 14px", textAlign: "left" }}>Component</th>
+                      <th style={{ padding: "10px 14px", textAlign: "left" }}>Selected Host</th>
+                      <th style={{ padding: "10px 14px", textAlign: "left" }}>Architectural Rationale</th>
+                      <th style={{ padding: "10px 14px", textAlign: "left" }}>Alternative Evaluated &amp; Rejected</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr style={{ borderBottom: "1px solid #E2ECE9" }}>
+                      <td style={{ padding: "10px 14px", fontWeight: 700 }}>Frontend Web App</td>
+                      <td style={{ padding: "10px 14px" }}><span className="badge-neo badge-neo-scope1">Vercel</span></td>
+                      <td style={{ padding: "10px 14px" }}>Native Next.js 16 App Router edge hosting, automatic asset compression, zero-config domain routing.</td>
+                      <td style={{ padding: "10px 14px", color: "var(--text-muted)" }}>AWS S3 + CloudFront: Excessive maintenance overhead for dynamic server routes.</td>
+                    </tr>
+                    <tr style={{ borderBottom: "1px solid #E2ECE9" }}>
+                      <td style={{ padding: "10px 14px", fontWeight: 700 }}>API Microservice</td>
+                      <td style={{ padding: "10px 14px" }}><span className="badge-neo badge-neo-scope2">Render</span></td>
+                      <td style={{ padding: "10px 14px" }}>Persistent Python 3.12 container runtime managed by Uvicorn. Supports PyMuPDF C-extensions, bounded image processing, and persistent connection pooling without serverless execution timeouts.</td>
+                      <td style={{ padding: "10px 14px", color: "var(--text-muted)" }}>AWS Lambda / Vercel Serverless: 50MB bundle size limits, C-extension compilation friction, and aggressive 10s execution cutoffs.</td>
+                    </tr>
+                    <tr style={{ borderBottom: "1px solid #E2ECE9" }}>
+                      <td style={{ padding: "10px 14px", fontWeight: 700 }}>Relational Persistence</td>
+                      <td style={{ padding: "10px 14px" }}><span className="badge-neo badge-neo-status">Neon PostgreSQL</span></td>
+                      <td style={{ padding: "10px 14px" }}>Serverless PostgreSQL with native JSONB binary indexing, ACID transaction guarantees, and transparent connection pooling.</td>
+                      <td style={{ padding: "10px 14px", color: "var(--text-muted)" }}>MongoDB: Lacks strict schema migration tooling and relational audit integrity for medical records.</td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: "10px 14px", fontWeight: 700 }}>AI Inference Engine</td>
+                      <td style={{ padding: "10px 14px" }}><span className="badge-neo badge-neo-accent">Google Gemini API</span></td>
+                      <td style={{ padding: "10px 14px" }}><code>gemini-3.8-flash</code> via official <code>google-genai</code> SDK. Provides sub-second latency, multimodal vision token handling, and native Pydantic JSON Schema enforcement.</td>
+                      <td style={{ padding: "10px 14px", color: "var(--text-muted)" }}>Local Llama 3: Requires high-cost GPU infrastructure and lacks guaranteed structured JSON schema adherence.</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* TAB 2: TWO-PASS PIPELINE (P0-P8) */}
+      {/* TAB 2: 7-STAGE CLINICAL PIPELINE */}
       {activeTab === "pipeline" && (
         <div>
-          <div className="card-neo" style={{ marginBottom: "24px" }}>
-            <span className="badge-neo badge-neo-scope2">Pipeline Specification</span>
-            <h2 style={{ margin: "10px 0 14px" }}>The Two-Pass Verified Pipeline Stages</h2>
-            <p style={{ color: "var(--text-dark)", lineHeight: 1.6, fontSize: "0.92rem" }}>
-              To prevent generative hallucinations and unsupported clinical leaps, Sanitas separates document processing into two distinct semantic passes with deterministic boundaries in between.
+          <div className="card-neo">
+            <span className="badge-neo badge-neo-scope1">Pipeline Mechanics</span>
+            <h2 style={{ margin: "10px 0 14px" }}>The 7-Stage Clinical Review Pipeline</h2>
+            <p style={{ color: "var(--text-muted)", fontSize: "0.92rem", lineHeight: 1.6 }}>
+              Clinical review requires strict separation between raw input ingestion, deterministic segmentation, factual extraction, evidence verification, and clinical synthesis. Every stage is bounded by a fail-closed quality gate.
             </p>
 
-            <MermaidChart chart={PIPELINE_FLOWCHART} />
+            <div className="mermaid-wrapper">
+              <MermaidChart chart={PIPELINE_DIAGRAM} />
+            </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginTop: "24px" }}>
               <div style={{ background: "#FFFFFF", border: "var(--ui-border)", borderRadius: "8px", padding: "16px" }}>
-                <h4 style={{ color: "var(--primary-dark)" }}>Stages P0 &amp; P1: Ingestion, Validation &amp; Routing</h4>
+                <h4 style={{ color: "var(--primary-dark)" }}>Stage P1: Document Ingestion &amp; Request Normalization</h4>
                 <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "4px" }}>
-                  Validates file signature via byte magic (`filetype`, `%PDF-`). Rejects oversized files (&gt;10 MB), page overflows (&gt;15 pages), and multiple inputs. Evaluates native character density: if &ge;80% of pages contain &ge;80 printable characters, it routes to `digital_pdf` native text extraction; otherwise routes to `scanned_or_visual_pdf`.
+                  Normalizes both JSON text payloads and multipart file uploads into a single internal <code>IngestedDocument</code> dataclass. Checks MIME magic bytes and enforces size constraints (max 10MB, max 15 pages, max 50,000 characters). Computes SHA-256 digest for audit immutability.
                 </p>
               </div>
 
               <div style={{ background: "#FFFFFF", border: "var(--ui-border)", borderRadius: "8px", padding: "16px" }}>
                 <h4 style={{ color: "var(--primary-dark)" }}>Stage P2: Canonical Document Construction</h4>
                 <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "4px" }}>
-                  Constructs the unified <code>CanonicalDocument</code> contract. Every piece of visible text is assigned an immutable segment identifier in visible reading order (<code>{"p{page_number}-s{seq_number}"}</code>).
+                  Constructs the unified <code>CanonicalDocument</code> contract. Every piece of visible text is assigned an immutable segment identifier in natural reading order (<code>{"p{page_number}-s{seq_number}"}</code>). Preserves original punctuation and line breaks for exact quote matching.
                 </p>
               </div>
 
               <div style={{ background: "#FFFFFF", border: "var(--ui-border)", borderRadius: "8px", padding: "16px" }}>
-                <h4 style={{ color: "var(--primary-dark)" }}>Stage P3: Fact Extraction (Pass 1 - Prompt E1.1)</h4>
+                <h4 style={{ color: "var(--primary-dark)" }}>Stage P3: Structured Fact Extraction (Pass 1 - Prompt E1.1)</h4>
                 <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "4px" }}>
-                  Extracts documented entities (patient demographics, symptoms, diagnoses, medications, vitals, allergies, observations) with strict JSON Schema constraints. No concerns or medical opinions are synthesized in this pass.
+                  Invokes Gemini with <code>temperature: 0.0</code> and strict Pydantic JSON Schema enforcement. Extracts patient demographics, symptoms, diagnoses, medications, vitals, allergies, observations, and uncertain items. Strictly prohibited from synthesizing clinical concerns or medical opinions.
                 </p>
               </div>
 
               <div style={{ background: "#FFFFFF", border: "var(--ui-border)", borderRadius: "8px", padding: "16px" }}>
-                <h4 style={{ color: "var(--primary-dark)" }}>Stages P4 &amp; P5: Deterministic Validation &amp; Inconsistency Rules</h4>
+                <h4 style={{ color: "var(--primary-dark)" }}>Stage P4: Deterministic Evidence Verification</h4>
                 <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "4px" }}>
-                  Validates evidence quotes against canonical segments with whitespace normalization. Checks for document-level factual contradictions (e.g. &quot;NKDA&quot; allergy status alongside a specific documented penicillin allergy; active and discontinued medication conflicts).
+                  Application code independently verifies that every referenced <code>segment_id</code> exists, page numbers match, and the referenced <code>quote</code> is a verbatim substring in normalized segment text. Claims failing verification fail closed with <code>EVIDENCE_VALIDATION_FAILED</code>.
                 </p>
               </div>
 
               <div style={{ background: "#FFFFFF", border: "var(--ui-border)", borderRadius: "8px", padding: "16px" }}>
-                <h4 style={{ color: "var(--primary-dark)" }}>Stages P6 &amp; P7: Review Synthesis (Pass 2 - Prompt R1.0) &amp; Quality Gate</h4>
+                <h4 style={{ color: "var(--primary-dark)" }}>Stage P5: Contradiction Candidate Detection Engine</h4>
                 <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "4px" }}>
-                  Synthesizes report summary, document-supported clinical concerns, context-sensitive missing information, and items requiring review. The quality gate verifies all referenced entity IDs and ensures prohibited prescriptive directive language is absent.
+                  Deterministic rule engine operating without LLM speculation. Identifies document-level contradictions:
+                  (1) &quot;NKDA&quot; allergy status alongside a specific documented penicillin allergy;
+                  (2) active vs discontinued medication status conflicts for the same drug;
+                  (3) conflicting vital sign recordings at identical timestamps.
+                </p>
+              </div>
+
+              <div style={{ background: "#FFFFFF", border: "var(--ui-border)", borderRadius: "8px", padding: "16px" }}>
+                <h4 style={{ color: "var(--primary-dark)" }}>Stage P6: Review Synthesis (Pass 2 - Prompt R1.0)</h4>
+                <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "4px" }}>
+                  Synthesizes an executive clinical review report (<code>ClinicalReview</code>) summarizing verified facts, contextualizing clinical concerns, highlighting potential inconsistencies from Stage P5, and surfacing actionable information gaps.
+                </p>
+              </div>
+
+              <div style={{ background: "#FFFFFF", border: "var(--ui-border)", borderRadius: "8px", padding: "16px" }}>
+                <h4 style={{ color: "var(--primary-dark)" }}>Stage P7: Final Review Quality Gate &amp; Safeguards</h4>
+                <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "4px" }}>
+                  Validates that all entity IDs referenced in review findings exist in Pass 1 extraction output. Verifies evidence quotes for clinical concerns. Scans narrative text against secondary regular expressions to prevent prescriptive directives.
                 </p>
               </div>
             </div>
@@ -251,125 +363,221 @@ export default function DocsPage() {
         </div>
       )}
 
-      {/* TAB 3: EVIDENCE GROUNDING */}
-      {activeTab === "evidence" && (
+      {/* TAB 3: INGESTION & MEMORY BOUNDING */}
+      {activeTab === "router" && (
         <div>
-          <div className="card-neo" style={{ marginBottom: "24px" }}>
-            <span className="badge-neo badge-neo-scope1">Grounding Mechanics</span>
-            <h2 style={{ margin: "10px 0 14px" }}>Verbatim Evidence Grounding Sequence</h2>
-            <p style={{ color: "var(--text-dark)", lineHeight: 1.6, fontSize: "0.92rem" }}>
-              Every extracted claim and reviewer finding must link directly to verbatim evidence spans present in the original document. No paraphrased quotes or hallucinated segment references are permitted.
+          <div className="card-neo">
+            <span className="badge-neo badge-neo-scope1">Intake Architecture</span>
+            <h2 style={{ margin: "10px 0 14px" }}>Multi-Modal Intake &amp; Memory Bounding</h2>
+            <p style={{ color: "var(--text-muted)", fontSize: "0.92rem", lineHeight: 1.6 }}>
+              Production web services on cloud hosting (such as Render) operate under strict memory ceilings (512 MB on standard tiers). Unconstrained PDF rendering or camera photo decoding can rapidly trigger Out-Of-Memory (OOM) fatal crashes.
             </p>
 
-            <MermaidChart chart={EVIDENCE_SEQUENCE} />
+            <div className="mermaid-wrapper">
+              <MermaidChart chart={ROUTER_FLOWCHART} />
+            </div>
 
-            <div style={{ background: "var(--mint-light)", border: "var(--ui-border)", borderRadius: "8px", padding: "18px", marginTop: "20px" }}>
-              <h4 style={{ color: "var(--emerald)", marginBottom: "8px" }}>Evidence Verification Math</h4>
-              <p style={{ fontSize: "0.88rem", color: "var(--text-dark)", lineHeight: 1.6 }}>
-                For an extracted entity with evidence ref <code>E = (segment_id, page_number, quote)</code> and canonical document segments <code>S</code>:
+            <div style={{ marginTop: "24px" }}>
+              <h3 style={{ color: "var(--primary-dark)", marginBottom: "12px" }}>Engineering Decisions for Bounded Ingestion</h3>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                <div style={{ background: "#FFFFFF", border: "var(--ui-border)", borderRadius: "8px", padding: "16px" }}>
+                  <h4 style={{ color: "var(--emerald)", marginBottom: "6px" }}>80% Text Density Heuristic</h4>
+                  <p style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
+                    Digital PDFs containing selectable text are parsed with PyMuPDF directly in CPU memory in milliseconds. Only scanned documents lacking text (less than 80% text pages) route to visual transcription, minimizing latency and token costs.
+                  </p>
+                </div>
+
+                <div style={{ background: "#FFFFFF", border: "var(--ui-border)", borderRadius: "8px", padding: "16px" }}>
+                  <h4 style={{ color: "var(--emerald)", marginBottom: "6px" }}>150 DPI Rendering &amp; 1600px Clamp</h4>
+                  <p style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
+                    Scanned PDF pages are rasterized at 150 DPI rather than 300 DPI, and image uploads are clamped to 1600px maximum dimension using Pillow LANCZOS antialiasing. This preserves optical legibility while keeping memory usage under 40 MB per request.
+                  </p>
+                </div>
+
+                <div style={{ background: "#FFFFFF", border: "var(--ui-border)", borderRadius: "8px", padding: "16px" }}>
+                  <h4 style={{ color: "var(--emerald)", marginBottom: "6px" }}>Strict Page &amp; Size Ceilings</h4>
+                  <p style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
+                    Hard limits enforce a maximum of 15 pages per PDF, 10 MB per file, and 50,000 characters per text note. Requests exceeding bounds are rejected immediately with typed HTTP 413 or 400 errors before memory allocation.
+                  </p>
+                </div>
+
+                <div style={{ background: "#FFFFFF", border: "var(--ui-border)", borderRadius: "8px", padding: "16px" }}>
+                  <h4 style={{ color: "var(--emerald)", marginBottom: "6px" }}>Unified IngestedDocument Contract</h4>
+                  <p style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
+                    Both JSON and multipart requests normalize into <code>IngestedDocument</code> immediately. No bifurcated processing pipelines exist, guaranteeing identical security and canonicalization across all modalities.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: TWO-PASS AI & PROMPT ENGINEERING */}
+      {activeTab === "twopass" && (
+        <div>
+          <div className="card-neo">
+            <span className="badge-neo badge-neo-scope1">Prompt Engineering</span>
+            <h2 style={{ margin: "10px 0 14px" }}>Two-Pass AI Architecture &amp; Prompt Isolation</h2>
+            <p style={{ color: "var(--text-muted)", fontSize: "0.92rem", lineHeight: 1.6 }}>
+              In clinical AI systems, single-shot extraction and synthesis is fundamentally prone to cognitive drift, ungrounded speculation, and prompt injection vulnerabilities. Sanitas isolates extraction from synthesis through two sequential passes.
+            </p>
+
+            <div className="mermaid-wrapper">
+              <MermaidChart chart={TWOPASS_DIAGRAM} />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginTop: "24px" }}>
+              <div style={{ background: "#FFFFFF", border: "var(--ui-border)", borderRadius: "8px", padding: "18px" }}>
+                <h3 style={{ color: "var(--primary-dark)", fontSize: "1.05rem", marginBottom: "8px" }}>
+                  Pass 1: Fact Extraction (Prompt E1.1)
+                </h3>
+                <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "10px" }}>
+                  Configured as a clinical extraction specialist with zero temperature and strict Pydantic JSON Schema enforcement.
+                </p>
+                <ul style={{ fontSize: "0.82rem", color: "var(--text-dark)", paddingLeft: "18px", lineHeight: 1.6 }}>
+                  <li>Extracts patient demographics, symptoms, diagnoses, medications, vitals, allergies, and observations.</li>
+                  <li>Every single entity must reference valid <code>EvidenceRef</code> objects.</li>
+                  <li>Strictly prohibited from inferring unstated diagnoses or generating medical opinions.</li>
+                  <li>Preserves negations (e.g. &quot;No chest pain&quot;) without converting them into positive findings.</li>
+                </ul>
+              </div>
+
+              <div style={{ background: "#FFFFFF", border: "var(--ui-border)", borderRadius: "8px", padding: "18px" }}>
+                <h3 style={{ color: "var(--primary-dark)", fontSize: "1.05rem", marginBottom: "8px" }}>
+                  Pass 2: Review Synthesis (Prompt R1.0)
+                </h3>
+                <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "10px" }}>
+                  Configured as an executive documentation reviewer summarizing grounded facts and highlighting risks.
+                </p>
+                <ul style={{ fontSize: "0.82rem", color: "var(--text-dark)", paddingLeft: "18px", lineHeight: 1.6 }}>
+                  <li>Produces concise executive summary (max 1200 chars).</li>
+                  <li>Contextualizes clinical concerns directly grounded in Pass 1 facts.</li>
+                  <li>Surfaces actionable missing information (missing dosages, missing lab reference ranges).</li>
+                  <li>Prohibited from issuing prescriptive medical directives (e.g. <em>&ldquo;I prescribe&rdquo;</em>).</li>
+                </ul>
+              </div>
+            </div>
+
+            <div style={{ background: "#F8FCF9", border: "1.5px solid var(--emerald)", borderRadius: "8px", padding: "16px", marginTop: "20px" }}>
+              <h4 style={{ color: "var(--primary-dark)", marginBottom: "6px" }}>Prompt Injection Boundary Enforcement</h4>
+              <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", margin: 0 }}>
+                Untrusted document content is wrapped within explicit isolation delimiters: <code>DATA_START</code> and <code>DATA_END</code>. The system prompt instructs the model that content between these tokens is untrusted data and that instructions or system overrides embedded inside it must never be executed.
               </p>
-              <ul style={{ fontSize: "0.84rem", color: "var(--text-muted)", paddingLeft: "20px", marginTop: "8px" }}>
-                <li><strong>Existence:</strong> A segment S exists such that S.id == E.segment_id and S.page == E.page_number</li>
-                <li><strong>Verbatim Substring:</strong> normalize(E.quote) is a direct substring of normalize(S.text)</li>
-                <li><strong>Integrity:</strong> Normalized comparison collapses arbitrary whitespace while strictly preserving letter casing, medical units, punctuation, and negative assertions.</li>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 5: EVIDENCE GROUNDING & CONTRADICTIONS */}
+      {activeTab === "evidence" && (
+        <div>
+          <div className="card-neo">
+            <span className="badge-neo badge-neo-scope1">Verification Mathematics</span>
+            <h2 style={{ margin: "10px 0 14px" }}>Deterministic Evidence Grounding &amp; Inconsistency Engine</h2>
+            <p style={{ color: "var(--text-muted)", fontSize: "0.92rem", lineHeight: 1.6 }}>
+              LLM confidence scores and self-reported probabilities cannot be trusted in high-stakes clinical domains. Sanitas enforces mathematical substring verification in Python application code.
+            </p>
+
+            <div className="mermaid-wrapper">
+              <MermaidChart chart={EVIDENCE_SEQUENCE} />
+            </div>
+
+            <div style={{ marginTop: "20px" }}>
+              <h3 style={{ color: "var(--primary-dark)", marginBottom: "12px" }}>Evidence Verification Algorithm</h3>
+              <div style={{ background: "#F8FCF9", border: "var(--ui-border)", borderRadius: "8px", padding: "18px", fontFamily: "monospace", fontSize: "0.82rem", lineHeight: 1.6 }}>
+                1. For each clinical entity E in extraction:<br/>
+                &nbsp;&nbsp;&nbsp;&nbsp;a. For each ref in E.evidence:<br/>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;i. Assert ref.segment_id in canonical_document.segments<br/>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ii. Assert ref.page_number == segment.page_number<br/>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;iii. normalized_quote = &quot; &quot;.join(ref.quote.split())<br/>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;iv. normalized_source = &quot; &quot;.join(segment.text.split())<br/>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v. Assert normalized_quote in normalized_source<br/>
+                2. If any assertion fails: Fail closed with EVIDENCE_VALIDATION_FAILED (HTTP 502)
+              </div>
+            </div>
+
+            <div style={{ marginTop: "20px" }}>
+              <h3 style={{ color: "var(--primary-dark)", marginBottom: "12px" }}>Stage P5 Deterministic Contradiction Rules</h3>
+              <ul style={{ fontSize: "0.88rem", color: "var(--text-dark)", paddingLeft: "20px", lineHeight: 1.8 }}>
+                <li>
+                  <strong>Rule 1 (Allergy Inconsistency):</strong> When an explicit status of <code>no_known_allergies</code> coexists with a specific documented drug allergy (e.g. Amoxicillin, Penicillin), flags a high-importance contradiction with references to both quotes.
+                </li>
+                <li>
+                  <strong>Rule 2 (Medication Status Conflict):</strong> When the same drug is simultaneously recorded with status <code>active</code> and <code>discontinued</code> without chronological resolution, flags a moderate-importance medication conflict.
+                </li>
+                <li>
+                  <strong>Rule 3 (Vital Sign Discrepancies):</strong> Identifies conflicting vital signs recorded under identical timestamps.
+                </li>
               </ul>
             </div>
           </div>
         </div>
       )}
 
-      {/* TAB 4: RELIABILITY & ERROR TAXONOMY */}
-      {activeTab === "errors" && (
+      {/* TAB 6: PERSISTENCE & SCHEMA */}
+      {activeTab === "persistence" && (
         <div>
           <div className="card-neo">
-            <span className="badge-neo badge-neo-scope1">Error Taxonomy</span>
-            <h2 style={{ margin: "10px 0 14px" }}>Strictly Typed, Safe Error Responses</h2>
-            <p style={{ color: "var(--text-muted)", fontSize: "0.88rem", marginBottom: "18px" }}>
-              Sanitas guarantees that raw stack traces, model provider exceptions, and patient document content never cross the API boundary. All errors map to calibrated, recoverable codes.
+            <span className="badge-neo badge-neo-scope1">Data Layer</span>
+            <h2 style={{ margin: "10px 0 14px" }}>PostgreSQL Persistence &amp; Dialect Portability</h2>
+            <p style={{ color: "var(--text-muted)", fontSize: "0.92rem", lineHeight: 1.6 }}>
+              Sanitas uses SQLAlchemy ORM and Alembic migrations with dialect portability across PostgreSQL and SQLite, backed by an explicit database availability policy.
             </p>
 
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.86rem" }}>
-                <thead>
-                  <tr style={{ background: "var(--mint-light)", borderBottom: "var(--ui-border)" }}>
-                    <th style={{ textAlign: "left", padding: "10px", fontWeight: 800 }}>HTTP Status</th>
-                    <th style={{ textAlign: "left", padding: "10px", fontWeight: 800 }}>Error Code</th>
-                    <th style={{ textAlign: "left", padding: "10px", fontWeight: 800 }}>User Message</th>
-                    <th style={{ textAlign: "left", padding: "10px", fontWeight: 800 }}>Actionable Suggestion</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr style={{ borderBottom: "1px solid var(--border-color)" }}>
-                    <td style={{ padding: "10px" }}><code>400</code></td>
-                    <td style={{ padding: "10px" }}><code>EMPTY_INPUT</code></td>
-                    <td style={{ padding: "10px" }}>Enter a synthetic note or select a document.</td>
-                    <td style={{ padding: "10px" }}>Provide non-empty text, PDF, or image.</td>
-                  </tr>
-                  <tr style={{ borderBottom: "1px solid var(--border-color)" }}>
-                    <td style={{ padding: "10px" }}><code>400</code></td>
-                    <td style={{ padding: "10px" }}><code>MULTIPLE_INPUTS</code></td>
-                    <td style={{ padding: "10px" }}>Provide either text or a single file, not both.</td>
-                    <td style={{ padding: "10px" }}>Submit one document input per request.</td>
-                  </tr>
-                  <tr style={{ borderBottom: "1px solid var(--border-color)" }}>
-                    <td style={{ padding: "10px" }}><code>413</code></td>
-                    <td style={{ padding: "10px" }}><code>FILE_TOO_LARGE</code></td>
-                    <td style={{ padding: "10px" }}>File exceeds maximum size.</td>
-                    <td style={{ padding: "10px" }}>Upload a file smaller than 10 MB.</td>
-                  </tr>
-                  <tr style={{ borderBottom: "1px solid var(--border-color)" }}>
-                    <td style={{ padding: "10px" }}><code>415</code></td>
-                    <td style={{ padding: "10px" }}><code>UNSUPPORTED_FILE_TYPE</code></td>
-                    <td style={{ padding: "10px" }}>File format not supported.</td>
-                    <td style={{ padding: "10px" }}>Upload PDF, JPEG, or PNG documents.</td>
-                  </tr>
-                  <tr style={{ borderBottom: "1px solid var(--border-color)" }}>
-                    <td style={{ padding: "10px" }}><code>502</code></td>
-                    <td style={{ padding: "10px" }}><code>EVIDENCE_VALIDATION_FAILED</code></td>
-                    <td style={{ padding: "10px" }}>Extraction could not be verified against source.</td>
-                    <td style={{ padding: "10px" }}>Resubmit or verify statements are in source.</td>
-                  </tr>
-                  <tr style={{ borderBottom: "1px solid var(--border-color)" }}>
-                    <td style={{ padding: "10px" }}><code>503</code></td>
-                    <td style={{ padding: "10px" }}><code>DATABASE_UNAVAILABLE</code></td>
-                    <td style={{ padding: "10px" }}>Database is currently unreachable.</td>
-                    <td style={{ padding: "10px" }}>Verify database configuration or connection.</td>
-                  </tr>
-                  <tr>
-                    <td style={{ padding: "10px" }}><code>504</code></td>
-                    <td style={{ padding: "10px" }}><code>MODEL_TIMEOUT</code></td>
-                    <td style={{ padding: "10px" }}>Upstream model processing took too long.</td>
-                    <td style={{ padding: "10px" }}>Try submitting a shorter note or retrying shortly.</td>
-                  </tr>
-                </tbody>
-              </table>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginTop: "18px" }}>
+              <div style={{ background: "#FFFFFF", border: "var(--ui-border)", borderRadius: "8px", padding: "16px" }}>
+                <h4 style={{ color: "var(--primary-dark)", marginBottom: "8px" }}>Explicit Database Policy</h4>
+                <p style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
+                  In production and standard development, <code>DATABASE_URL</code> is required. If PostgreSQL is unreachable, requests fail explicitly with a typed <code>DATABASE_UNAVAILABLE</code> error. Silent fallbacks to SQLite or in-memory stores are strictly prohibited in non-test environments to avoid masking infrastructure misconfigurations.
+                </p>
+              </div>
+
+              <div style={{ background: "#FFFFFF", border: "var(--ui-border)", borderRadius: "8px", padding: "16px" }}>
+                <h4 style={{ color: "var(--primary-dark)", marginBottom: "8px" }}>Dialect Portability Strategy</h4>
+                <p style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
+                  Database models use SQLAlchemy generic <code>Uuid</code> and <code>JSON().with_variant(JSONB, &quot;postgresql&quot;)</code>. In production on Neon, columns use native PostgreSQL JSONB indexing and UUID types. In automated unit test fixtures (<code>is_explicit_test=True</code>), tests run instantly against in-memory SQLite with StaticPool.
+                </p>
+              </div>
+            </div>
+
+            <div style={{ background: "#FFFFFF", border: "var(--ui-border)", borderRadius: "8px", padding: "16px", marginTop: "16px" }}>
+              <h4 style={{ color: "var(--primary-dark)", marginBottom: "8px" }}>Relational Schema Specification</h4>
+              <ul style={{ fontSize: "0.85rem", color: "var(--text-muted)", paddingLeft: "18px", lineHeight: 1.7 }}>
+                <li><strong>analyses table:</strong> <code>analysis_id</code> (UUID PK), <code>created_at</code>, <code>completed_at</code>, <code>status</code>, <code>source_type</code>, <code>sha256</code>, <code>canonical_document</code> (JSONB), <code>clinical_extraction</code> (JSONB), <code>clinical_review</code> (JSONB), <code>timings_ms</code> (JSONB).</li>
+                <li><strong>processing_events table:</strong> <code>event_id</code> (UUID PK), <code>analysis_id</code> (FK), <code>stage</code>, <code>status</code>, <code>details</code> (JSONB), <code>created_at</code>. Tracks pipeline telemetry and quality gate evaluations.</li>
+              </ul>
             </div>
           </div>
         </div>
       )}
 
-      {/* TAB 5: EVALUATION METHODOLOGY */}
+      {/* TAB 7: EVALUATION INTEGRITY & SAFETY */}
       {activeTab === "evaluation" && (
         <div>
           <div className="card-neo">
-            <span className="badge-neo badge-neo-scope2">Benchmarking &amp; Rigor</span>
-            <h2 style={{ margin: "10px 0 14px" }}>Evaluation Framework &amp; Integrity Principles</h2>
-            <p style={{ color: "var(--text-dark)", lineHeight: 1.6, fontSize: "0.92rem" }}>
-              To ensure scientific integrity, Sanitas strictly differentiates between offline structural CI test suites and live model performance benchmarks.
+            <span className="badge-neo badge-neo-scope1">Verification &amp; QA</span>
+            <h2 style={{ margin: "10px 0 14px" }}>Evaluation Methodology &amp; Anti-Vibe-Coding Standards</h2>
+            <p style={{ color: "var(--text-muted)", fontSize: "0.92rem", lineHeight: 1.6 }}>
+              Sanitas adheres to the Agentic Web Development Handbook standards, enforcing strict separation between structural CI validation and empirical model benchmarking.
             </p>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "18px", marginTop: "20px" }}>
-              <div style={{ background: "var(--mint-light)", border: "var(--ui-border)", borderRadius: "8px", padding: "16px" }}>
-                <h4 style={{ color: "var(--emerald)", marginBottom: "6px" }}>Offline CI Test Suite</h4>
+            <div className="callout-neo callout-info" style={{ margin: "18px 0" }}>
+              <strong>Evaluation Integrity Policy:</strong> Offline/mock evaluation is strictly for CI regression testing and schema validation. Mock metrics are <em>never</em> reported as model performance. Empirical metrics must come from actual Gemini executions on annotated synthetic cases.
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+              <div style={{ background: "#FFFFFF", border: "var(--ui-border)", borderRadius: "8px", padding: "16px" }}>
+                <h4 style={{ color: "var(--emerald)", marginBottom: "6px" }}>Offline CI Structural Mode (<code>--mock</code>)</h4>
                 <p style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
-                  Runs in GitHub Actions CI without API keys. Validates route handlers, MIME sniffers, Pydantic schema adherence, evidence verification gates, and database models.
+                  Exercises the complete 7-stage pipeline across 7 synthetic benchmark cases using deterministic mocked outputs. Verifies canonicalization, schema conformance, inconsistency rules, and quality gates with zero external API calls.
                 </p>
               </div>
 
-              <div style={{ background: "var(--mint-light)", border: "var(--ui-border)", borderRadius: "8px", padding: "16px" }}>
-                <h4 style={{ color: "var(--emerald)", marginBottom: "6px" }}>Live Benchmark Suite</h4>
+              <div style={{ background: "#FFFFFF", border: "var(--ui-border)", borderRadius: "8px", padding: "16px" }}>
+                <h4 style={{ color: "var(--emerald)", marginBottom: "6px" }}>Live Gemini Benchmark Mode (<code>--live</code>)</h4>
                 <p style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
-                  Evaluates 40 synthetic clinical documents across text, digital PDF, visual PDF, and images. Measures Precision, Recall, F1, Evidence Validity Rate, and Latency percentiles (P50/P95).
+                  Executes live model calls using <code>gemini-3.8-flash</code> across synthetic test encounters. Computes empirical Precision, Recall, F1 Score, Evidence Validity Rate, and Latency percentiles (P50/P95).
                 </p>
               </div>
             </div>
@@ -387,63 +595,70 @@ export default function DocsPage() {
         </div>
       )}
 
-      {/* TAB 6: REST API REFERENCE */}
+      {/* TAB 8: REST API REFERENCE */}
       {activeTab === "api" && (
         <div>
           <div className="card-neo">
             <span className="badge-neo badge-neo-scope1">API Specification</span>
             <h2 style={{ margin: "10px 0 14px" }}>REST API Endpoint Reference</h2>
             <p style={{ color: "var(--text-muted)", fontSize: "0.88rem", marginBottom: "18px" }}>
-              The Sanitas API uses standard HTTP methods, JSON/multipart bodies, and typed error responses under `/api/v1`.
+              The Sanitas API uses standard HTTP methods, JSON/multipart bodies, and typed error responses under <code>/api/v1</code>.
             </p>
 
             {/* Endpoint 1 */}
-            <div style={{ background: "var(--mint-light)", border: "var(--ui-border)", borderRadius: "8px", padding: "16px", marginBottom: "18px" }}>
+            <div style={{ background: "#F8FCF9", border: "1.5px solid var(--border-color)", borderRadius: "8px", padding: "16px", marginBottom: "16px" }}>
               <div style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "8px" }}>
-                <span className="badge-neo badge-neo-status">POST</span>
-                <code style={{ fontSize: "1rem", fontWeight: 700 }}>/api/v1/analyses</code>
+                <span className="badge-neo badge-neo-high">POST</span>
+                <code style={{ fontWeight: 800, fontSize: "0.95rem" }}>/api/v1/analyses</code>
               </div>
-              <p style={{ fontSize: "0.85rem", color: "var(--text-dark)", marginBottom: "10px" }}>
-                Submit a synthetic clinical document for full two-pass evidence-grounded review. Accepts either JSON (`text`) or multipart (`file`).
+              <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "8px" }}>
+                Submits a synthetic document for 7-stage review and persistence. Accepts either JSON (<code>&#123;&quot;text&quot;: &quot;...&quot;&#125;</code>) or multipart/form-data with a <code>file</code> field.
               </p>
-              <pre className="mermaid-code" style={{ background: "#FFFFFF", border: "1px solid var(--border-color)", padding: "12px", borderRadius: "6px" }}>
-<code>{`# 1. Plain-text JSON request
-curl -X POST https://sanitas-api.onrender.com/api/v1/analyses \\
-  -H "Content-Type: application/json" \\
-  -d '{"text": "Patient: Jane Doe\\nComplains of acute headache."}'
-
-# 2. File upload request (PDF or Image)
-curl -X POST https://sanitas-api.onrender.com/api/v1/analyses \\
-  -F "file=@clinical_scan.pdf"`}</code>
-              </pre>
+              <div style={{ fontSize: "0.78rem", color: "var(--text-dark)", fontFamily: "monospace" }}>
+                Responses: 200 OK (Completed AnalysisResponse), 400 (Invalid Request), 413 (Text/File Too Large), 502 (Verification Failed), 503 (Database Unavailable).
+              </div>
             </div>
 
             {/* Endpoint 2 */}
-            <div style={{ background: "var(--mint-light)", border: "var(--ui-border)", borderRadius: "8px", padding: "16px", marginBottom: "18px" }}>
+            <div style={{ background: "#F8FCF9", border: "1.5px solid var(--border-color)", borderRadius: "8px", padding: "16px", marginBottom: "16px" }}>
               <div style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "8px" }}>
-                <span className="badge-neo badge-neo-low">GET</span>
-                <code style={{ fontSize: "1rem", fontWeight: 700 }}>/api/v1/analyses</code>
+                <span className="badge-neo badge-neo-scope1">GET</span>
+                <code style={{ fontWeight: 800, fontSize: "0.95rem" }}>/api/v1/analyses</code>
               </div>
-              <p style={{ fontSize: "0.85rem", color: "var(--text-dark)", marginBottom: "10px" }}>
-                List paginated previous analyses from PostgreSQL history (`limit`, `cursor`, `status`).
+              <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "8px" }}>
+                Retrieves a paginated list of recent analyses from PostgreSQL for the audit history ledger. Supports query parameters <code>limit</code> and <code>cursor</code>.
               </p>
-              <pre className="mermaid-code" style={{ background: "#FFFFFF", border: "1px solid var(--border-color)", padding: "12px", borderRadius: "6px" }}>
-<code>{`curl https://sanitas-api.onrender.com/api/v1/analyses?limit=20`}</code>
-              </pre>
+              <div style={{ fontSize: "0.78rem", color: "var(--text-dark)", fontFamily: "monospace" }}>
+                Response: 200 OK (AnalysisListResponse with items and next_cursor).
+              </div>
             </div>
 
             {/* Endpoint 3 */}
-            <div style={{ background: "var(--mint-light)", border: "var(--ui-border)", borderRadius: "8px", padding: "16px" }}>
+            <div style={{ background: "#F8FCF9", border: "1.5px solid var(--border-color)", borderRadius: "8px", padding: "16px", marginBottom: "16px" }}>
               <div style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "8px" }}>
-                <span className="badge-neo badge-neo-low">GET</span>
-                <code style={{ fontSize: "1rem", fontWeight: 700 }}>/api/v1/analyses/{`{analysis_id}`}</code>
+                <span className="badge-neo badge-neo-scope1">GET</span>
+                <code style={{ fontWeight: 800, fontSize: "0.95rem" }}>/api/v1/analyses/&#123;id&#125;</code>
               </div>
-              <p style={{ fontSize: "0.85rem", color: "var(--text-dark)", marginBottom: "10px" }}>
-                Retrieve a full persisted analysis by its UUID, including canonical segments, extracted facts, and review findings.
+              <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "8px" }}>
+                Retrieves the complete, permanent analysis record by UUID, including canonical segments, extracted facts, and synthesized review findings.
               </p>
-              <pre className="mermaid-code" style={{ background: "#FFFFFF", border: "1px solid var(--border-color)", padding: "12px", borderRadius: "6px" }}>
-<code>{`curl https://sanitas-api.onrender.com/api/v1/analyses/04253db5-927d-4ba6-8656-91e8557eb6ef`}</code>
-              </pre>
+              <div style={{ fontSize: "0.78rem", color: "var(--text-dark)", fontFamily: "monospace" }}>
+                Responses: 200 OK (AnalysisResponse), 404 NOT_FOUND.
+              </div>
+            </div>
+
+            {/* Endpoint 4 */}
+            <div style={{ background: "#F8FCF9", border: "1.5px solid var(--border-color)", borderRadius: "8px", padding: "16px" }}>
+              <div style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "8px" }}>
+                <span className="badge-neo badge-neo-scope1">GET</span>
+                <code style={{ fontWeight: 800, fontSize: "0.95rem" }}>/health</code>
+              </div>
+              <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "8px" }}>
+                Secret-free liveness health check returning service name, status, and version without initiating database or external AI connections.
+              </p>
+              <div style={{ fontSize: "0.78rem", color: "var(--text-dark)", fontFamily: "monospace" }}>
+                Response: 200 OK (<code>&#123;&quot;status&quot;: &quot;ok&quot;, &quot;service&quot;: &quot;sanitas-api&quot;, &quot;version&quot;: &quot;0.1.0&quot;&#125;</code>).
+              </div>
             </div>
           </div>
         </div>
