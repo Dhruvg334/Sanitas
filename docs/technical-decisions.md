@@ -1,54 +1,85 @@
 # Technical Decisions
 
-## Hosting: Vercel for Next.js and Render for FastAPI
+This document records the architectural decisions, trade-offs, and implementation rationales adopted across the Sanitas platform.
+
+---
+
+## 1. Hosting Architecture: Vercel (Frontend), Render (Backend), Neon (Database)
 
 ### Decision
-Deploy the Next.js frontend (`apps/web`) to **Vercel** and the FastAPI backend (`apps/api`) to **Render**, targeting **Neon PostgreSQL** for future database persistence.
+Deploy the Next.js frontend (`apps/web`) to **Vercel**, the FastAPI backend (`apps/api`) to **Render**, persist state to **Neon PostgreSQL**, and utilize **Google Gemini API** for structured inference.
 
-### Architectural Rationale
-- **Vercel for Frontend:** Vercel is the native platform for Next.js App Router applications, providing optimized static asset delivery, incremental builds, edge routing, and simple domain/preview management.
-- **Render for Backend:** Sanitas backend workloads are planned to expand toward digital PDF parsing, document image handling, multimodal inference, database persistence, and longer-running processing pipelines. A conventional Python web-service runtime is an architectural fit superior to a serverless-function model for this backend profile:
-  - Render allows the FastAPI application to run as a standard long-lived Uvicorn service without serverless bundle-size limits, bespoke entrypoint shims, or aggressive execution cutoffs.
-  - Dependencies such as PyMuPDF, Pillow, and database connection pools operate reliably in a standard containerized Linux environment.
-- **Trade-offs & Known Limitations:**
-  - Free Render web services spin down after 15 minutes of inactivity and may take 50+ seconds to cold-start on the subsequent request. This is an understood deployment limitation of the free tier.
-  - Available Render evaluation credits or paid instance upgrades may be applied during reviewer evaluation to avoid or reduce cold-start latency.
-  - No guarantees are claimed regarding absolute uptime or latency on free-tier infrastructure.
+### Rationale
+- **Vercel for Frontend:** Next.js App Router applications benefit from Vercel's native edge network, dynamic server rendering, and zero-configuration asset optimization.
+- **Render for Backend:** Document processing workloads (PyMuPDF binary parsing, image decoding, multi-step LLM calls, PostgreSQL connection pooling) require a long-lived Linux container environment. Render provides persistent Uvicorn web services without serverless execution time limits or bundle size constraints.
+- **Neon PostgreSQL for Persistence:** Serverless PostgreSQL provides ACID compliance, JSONB document querying, and connection pooling suitable for multi-modal analysis persistence.
 
-## Reproducible Dependencies
+---
 
-The frontend uses exact dependency versions pinned in `apps/web/package.json` and locked with `apps/web/package-lock.json`, installed via `npm ci`. ESLint 9.39.5 and TypeScript 6.0.3 are pinned to maintain compatibility with Next.js flat configuration without peer override flags.
+## 2. Immediate Request Normalization: Single Ingestion Representation
 
-The backend targets Python 3.12 with direct requirements recorded in `apps/api/requirements.in`. Complete transitive dependencies (including cross-platform markers for Linux and Windows) are pinned in `apps/api/requirements.txt` compiled using uv 0.12.18:
+### Decision
+Both plain-text JSON requests (`POST /api/v1/analyses {"text": "..."}`) and multipart file uploads (`POST /api/v1/analyses` with file attachment) are normalized immediately into a unified internal dataclass `IngestedDocument` within `document_router.py`.
 
-```sh
-uv pip compile --python-version 3.12 --universal requirements.in --output-file requirements.txt
-```
+### Rationale
+Creating parallel pipelines for different input formats leads to duplicate validation logic, divergent canonicalization paths, and inconsistent error handling. By normalizing immediately into `IngestedDocument(source_type, original_filename, text_content, file_bytes, sha256)`, subsequent processing stages (canonicalization, extraction, validation, persistence) operate against a single contract.
 
-uv is an isolated build/maintenance tool and is not required for production deployment or ordinary developer setup.
+---
 
-## Synchronous Vertical Slice vs Asynchronous Workers
+## 3. Database Fallback Policy: Explicit Error over Silent In-Memory Degradation
 
-For this initial synthetic plain-text slice, analysis execution is synchronous:
-- Plain-text note payloads are bounded to 50,000 characters.
-- Structured Gemini model calls complete well within the application timeout (default 90s, bounded to 300s).
-- Avoiding an external queue (Celery, Redis) keeps the initial deployment lightweight while remaining extensible to worker pools once heavier PDF/image ingestion is added.
+### Decision
+In production and standard development, the backend strictly requires `DATABASE_URL`. If the database is missing or unreachable, requests fail explicitly with a typed `DATABASE_UNAVAILABLE` error. Silent fallback to SQLite or in-memory storage is strictly prohibited in non-test environments.
 
-## Deterministic Canonicalization & Evidence Verification
+### Rationale
+Silent fallbacks mask infrastructure misconfigurations, cause unexpected data loss across container restarts, and produce confusing behavior in production. In-memory SQLite with `StaticPool` is enabled **exclusively** during automated test execution when `is_explicit_test` is true.
 
-Rather than asking an LLM to segment text or trusting structured model outputs blindly:
-- Plain text is segmented into Page 1 lines (`p1-s1`, `p1-s2`, etc.) deterministically in Python before any model call.
-- After Gemini extraction, application code deterministically verifies that referenced segments exist, page numbers match, and quotes are verbatim substrings in normalized segment text.
-- Claims failing evidence verification fail closed with `EVIDENCE_VALIDATION_FAILED`.
+---
 
-## Secret-Free Startup & Independent Liveness
+## 4. Frontend Design System: High-Contrast Carbonly Styling
 
-Importing `app.main` or running `GET /health` never initializes the Gemini SDK or database clients. The `google.genai` SDK is imported lazily inside the extractor service only when an analysis request is received. This allows CI workflows, smoke tests, and local developer health checks to execute without API credentials.
+### Decision
+Adopt the high-contrast **Carbonly** design system across all frontend pages (`apps/web`), characterized by:
+- Deep forest primary hues (`--primary-dark: #0B3D2E`)
+- Emerald accents (`--emerald: #2D6A4F`)
+- Clean mint-tinted neutral surfaces (`--mint-light: #F4F9F5`)
+- High-contrast, sharp border aesthetics (`--ui-border: 1px solid #1E293B`, `--ui-shadow: 3px 3px 0 #1E293B`)
+- Client-side dynamic SVG Mermaid diagram rendering for technical documentation.
 
-## Safe Error Taxonomy
+### Rationale
+Clinical software requires exceptional legibility, clear visual hierarchy, and unambiguous demarcations between system statuses, evidence references, and clinical findings.
 
-No raw Gemini exception messages, tracebacks, or document texts are exposed to the client. All failures are caught and mapped to a safe `SafeError` response containing:
-- A standardized `ErrorCode` string
-- A safe user-facing message
-- An actionable suggestion
-- A unique correlation ID (`uuid4`)
+---
+
+## 5. Bounded Memory for Multimodal Document Processing
+
+### Decision
+For scanned PDFs and image uploads:
+- PDF page rendering is capped at 150 DPI.
+- Maximum image dimension is clamped to 1600 pixels using LANCZOS antialiasing.
+- Maximum page count is enforced at 15 pages per document; maximum file size is capped at 10 MB.
+
+### Rationale
+Unconstrained PDF rendering and high-resolution camera scans can quickly allocate hundreds of megabytes of RAM, triggering Out-Of-Memory (OOM) kills on standard cloud web service instances (such as Render's 512 MB free tier). Bounded rendering maintains sufficient visual fidelity for clinical transcription while keeping memory usage strictly bounded.
+
+---
+
+## 6. Two-Pass AI Extraction & Synthesis vs Single-Shot Prompting
+
+### Decision
+Separate clinical review into two distinct AI passes:
+1. **Pass 1 (Prompt E1.1):** Schema-constrained fact extraction.
+2. **Pass 2 (Prompt R1.0):** Clinical review synthesis and risk evaluation.
+
+### Rationale
+Single-shot extraction and synthesis frequently suffers from hallucinations, cognitive drift, and premature medical opinions. By first anchoring all documented facts to verbatim source quotes, deterministic rules can inspect and validate the facts before any synthesis is attempted. The synthesis pass is then strictly bounded by the grounded entities established in Pass 1.
+
+---
+
+## 7. Database Dialect Portability
+
+### Decision
+Use SQLAlchemy's generic `Uuid` type and `JSON().with_variant(JSONB, "postgresql")` for JSON document columns in database models.
+
+### Rationale
+This ensures that schema models and Alembic migrations execute natively against PostgreSQL in production using native UUIDs and JSONB binary storage, while allowing rapid, zero-dependency unit tests to run seamlessly against SQLite in-memory engines.

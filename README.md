@@ -1,79 +1,84 @@
-# Sanitas
+# Sanitas: AI Clinical Document Reviewer
 
-Sanitas is an AI clinical document reviewer for **synthetic data only**. This release implements the end-to-end clinical review vertical slice: synthetic plain-text clinical-note submission, deterministic canonicalization into source segments, Gemini-based schema-constrained extraction, deterministic source evidence verification, and an accessible frontend results interface with inspectable source quotes.
+Sanitas is an AI-assisted clinical document reviewer built for **synthetic medical data**. It ingests multi-modal clinical documents (plain text, digital PDFs, scanned PDFs, and document images), normalizes them into immutable canonical source segments, extracts clinical facts using schema-constrained reasoning with Google Gemini, deterministically validates source evidence and factual contradictions, and synthesizes structured clinical review reports accessible through an inspectable, evidence-linked web interface.
 
-## Architecture & Deployment Model
+---
 
-Sanitas is structured for deployment across modern cloud platforms:
+## 1. Live Deployments
 
-- **Frontend**: Next.js 16 on **Vercel** (`apps/web`)
-- **Backend**: Python 3.12 FastAPI on **Render** (`apps/api` as a standard Uvicorn web service)
-- **AI Service**: Google **Gemini API** (`gemini-3.8-flash`)
-- **Database (Target)**: **Neon PostgreSQL** when analysis persistence and report history are added (*deferred from current slice*)
+- **Frontend**: [https://sanitas-peach.vercel.app](https://sanitas-peach.vercel.app) (Deployed on **Vercel**)
+- **Backend API**: [https://sanitas-api.onrender.com](https://sanitas-api.onrender.com) (Deployed on **Render**)
+- **Database**: **Neon PostgreSQL** (Serverless PostgreSQL for analysis persistence & audit logging)
+- **AI Model**: **Google Gemini API** (`gemini-3.8-flash` / `gemini-2.5-flash`)
+
+---
+
+## 2. Architecture & 7-Stage Pipeline
 
 ```text
-Browser
+Browser / Client (Next.js 16 on Vercel)
    │
-   ▼
-Next.js on Vercel (apps/web)
+   ▼ POST /api/v1/analyses (JSON or multipart/form-data)
+FastAPI Backend on Render (Python 3.12 / Uvicorn)
+   ├── Stage P1: Request Normalization & Adaptive Ingestion Router
+   │             (Plain text, PyMuPDF digital PDF, bounded image/scanned PDF)
+   ├── Stage P2: Canonical Document Construction (p{page}-s{seq} segments)
+   ├── Stage P3: Structured Fact Extraction (Pass 1 - Gemini Prompt E1.1)
+   ├── Stage P4: Deterministic Evidence Verification (Verbatim quote checks)
+   ├── Stage P5: Deterministic Inconsistency Engine (Contradiction rules)
+   ├── Stage P6: Review Synthesis (Pass 2 - Gemini Prompt R1.0)
+   └── Stage P7: Review Quality Gate (Entity cross-referencing & safeguards)
    │
-   │  POST /api/v1/analyses {"text": "..."}
-   ▼
-FastAPI on Render (apps/api)
-   ├── Canonicalization (p1-s1, p1-s2, ...)
-   ├── Gemini API (Prompt E1.1, Schema-Constrained)
-   └── Deterministic Evidence Gate
-   │
-   ▼ [Future Increment]
-Neon PostgreSQL (Analysis persistence & history)
+   ▼ Persist State & Event Ledger
+Neon PostgreSQL (Analyses & Processing Events)
 ```
 
-## Implemented Product Slice
+---
 
-1. **Synthetic Clinical Note Submission:** Web interface accepting synthetic plain-text clinical notes with character limit checking (max 50,000 characters), accompanied by a pre-loaded synthetic clinical demo note.
-2. **Deterministic Canonicalization:** Normalizes plain-text notes into Page 1 canonical source segments (`p1-s1`, `p1-s2`, etc.) while strictly preserving original wording for verification.
-3. **Structured Extraction via Gemini:** Extracts patient information, symptoms, diagnoses/conditions, medications, vitals, allergies, clinical observations, and uncertain items using schema-constrained JSON output.
-4. **Deterministic Evidence Verification:** Every extracted claim references canonical segments and is verified in application code (verifying segment ID existence, page number, and verbatim quote presence after whitespace normalization). Failing evidence references fail closed.
-5. **Inspectable Results UI:** Formats extracted clinical entities into readable cards with status and certainty indicators, featuring interactive source evidence pills that highlight corresponding segments in the source document viewer.
-6. **Typed Error Taxonomy:** Transparent error boundary returning actionable safe errors for empty input, oversized text, invalid requests, rate limits, timeouts, service unavailability, and validation failures.
+## 3. Core Features
 
-*Note: PDF/image upload, OCR, persistence/history, and authentication are intentionally deferred from this vertical slice.*
+- **Multi-Modal Document Ingestion:** Supports plain-text notes, digital PDFs, scanned/visual PDFs, and JPEG/PNG document scans with strict bounds (max 10 MB, max 15 pages, max 50,000 chars).
+- **Two-Pass AI Architecture:**
+  - **Pass 1 (Extraction):** Strictly extracts documented entities (demographics, symptoms, diagnoses, medications, vitals, allergies, observations) with zero speculative opinion.
+  - **Pass 2 (Synthesis):** Reviews extracted facts, contextualizes clinical concerns, and highlights actionable information gaps.
+- **Deterministic Evidence Grounding:** Every extracted entity and concern links to exact canonical segment IDs (`p1-s1`, etc.) and is deterministically verified via normalized substring matching.
+- **Factual Contradiction Engine:** Automatically flags document-level inconsistencies (e.g. "NKDA" allergy status alongside a documented penicillin allergy; active vs discontinued medication conflicts).
+- **Carbonly Design System:** High-contrast UI featuring deep forest greens, emerald highlights, crisp mint surfaces, and accessible typography.
+- **Interactive Technical Documentation:** Built-in documentation portal (`/docs`) with interactive tabs and dynamic SVG Mermaid architectural diagrams.
+- **Durable Analysis Permalinks:** Persistent analysis review pages (`/review/[id]`) that survive browser refreshes.
+- **Audit History Ledger:** Browse and reopen previous analyses at `/history`.
 
-## Requirements
+---
 
+## 4. Local Development
+
+### Prerequisites
 - Node.js 22 with npm 10
 - Python 3.12
-- Google Gemini API key (for live clinical note analysis; the test suite and health checks run without credentials)
-
-Frontend dependencies are pinned in `apps/web/package.json` and `package-lock.json`. Backend direct dependencies are in `apps/api/requirements.in`; complete cross-platform resolutions are pinned in `apps/api/requirements.txt`.
-
-## Local Development
+- Google Gemini API key (for live model runs; test suite and health checks run without credentials)
+- PostgreSQL database (or leave default for local testing)
 
 ### 1. Backend Service (`apps/api`)
 
-Create and activate a Python 3.12 virtual environment:
-
 ```sh
 cd apps/api
-# On Linux / macOS:
-python3.12 -m venv .venv
-source .venv/bin/activate
 
-# On Windows PowerShell:
+# Create and activate virtual environment
+# Windows PowerShell:
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-```
+# Linux / macOS:
+# python3.12 -m venv .venv && source .venv/bin/activate
 
-Install locked dependencies and run the service:
-
-```sh
+# Install locked dependencies
 python -m pip install -r requirements.txt
+
+# Start backend development server
 uvicorn app.main:app --reload --port 8000
 ```
 
-- [GET /health](http://localhost:8000/health) returns liveness status (`status`, `service`, `version`) without external dependencies.
-- [POST /api/v1/analyses](http://localhost:8000/api/v1/analyses) processes synthetic plain-text notes.
-- [Swagger UI](http://localhost:8000/docs) is available locally.
+- Liveness check: [http://localhost:8000/health](http://localhost:8000/health)
+- Swagger UI docs: [http://localhost:8000/docs](http://localhost:8000/docs)
 
 ### 2. Frontend Application (`apps/web`)
 
@@ -87,103 +92,60 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-## Configuration
+---
 
-Template files `.env.example` are provided in both `apps/web` and `apps/api`. Never commit `.env` files or secret keys.
+## 5. Configuration Reference
 
-### Backend (`apps/api/.env`)
+Template configuration files `.env.example` are provided in both `apps/web` and `apps/api`.
 
-- `GEMINI_API_KEY`: API key for Google Gemini model calls (leave empty for testing/health only).
-- `GEMINI_MODEL`: Model name; default `gemini-3.8-flash`.
-- `CORS_ALLOWED_ORIGINS`: Comma-separated allowed frontend origins; default `http://localhost:3000`.
-- `MAX_TEXT_CHARS`: Maximum allowed note characters; default `50000`.
-- `MODEL_TIMEOUT_SECONDS`: Extraction timeout in seconds; default `90`.
-- `APP_ENV`: Application environment (`development` / `production`); default `development`.
-- `APP_VERSION`: Service version; default `0.1.0`.
-- `LOG_LEVEL`: Logging verbosity; default `INFO`.
+### Backend Settings (`apps/api/.env`)
+- `GEMINI_API_KEY`: API key for Google Gemini model calls.
+- `GEMINI_MODEL`: Model version; defaults to `gemini-3.8-flash`.
+- `DATABASE_URL`: PostgreSQL connection string (e.g. `postgresql+psycopg://...`).
+- `CORS_ALLOWED_ORIGINS`: Allowed origins; defaults to `http://localhost:3000`.
+- `MAX_TEXT_CHARS`: Maximum text note length; default `50000`.
+- `MAX_UPLOAD_BYTES`: Maximum upload size; default `10485760` (10 MB).
+- `MAX_PDF_PAGES`: Maximum pages for PDF documents; default `15`.
+- `MODEL_TIMEOUT_SECONDS`: Request timeout; default `90`.
 
-### Frontend (`apps/web/.env.local`)
+### Frontend Settings (`apps/web/.env.local`)
+- `NEXT_PUBLIC_API_BASE_URL`: Base URL of the FastAPI backend; defaults to `http://localhost:8000`.
 
-- `NEXT_PUBLIC_API_BASE_URL`: Base URL of the FastAPI backend; defaults to `http://localhost:8000` in local development.
+---
 
-## Validation
+## 6. Testing & Evaluation
 
-Run the repository's test and build suites locally:
-
-### Frontend (`apps/web`)
-
+### Backend Test Suite
 ```sh
-npm ci
+cd apps/api
+pytest -v
+python -m app.smoke
+```
+Runs 33 automated tests covering foundation, canonicalization, input validation, multimodal routing, inconsistency rules, quality gates, and database persistence.
+
+### Synthetic Evaluation Suite
+```sh
+cd apps/api
+
+# CI Structural Validation (mocked, offline, fast)
+python -m eval.runner --mock
+
+# Live Model Benchmark (requires GEMINI_API_KEY)
+python -m eval.runner --live
+```
+
+### Frontend Static Analysis & Build
+```sh
+cd apps/web
 npm run lint
 npm run typecheck
 npm run build
 ```
 
-### Backend (`apps/api`, with virtual environment active)
+---
 
-```sh
-python -m pip install -r requirements.txt
-python -m pip check
-pytest
-python -m app.smoke
-```
+## 7. Safety & Ethical Boundaries
 
-CI executes these same commands on every push and pull request. Mocked tests do not require external credentials or network connectivity.
-
-## Deployment Instructions
-
-### 1. Backend Deployment on Render
-
-The backend runs as a conventional Python web service on **Render**, binding Uvicorn to `0.0.0.0:$PORT`.
-
-#### Option A: Deploy via Blueprint (`render.yaml`)
-1. In the [Render Dashboard](https://dashboard.render.com), click **New > Blueprint**.
-2. Connect your Sanitas GitHub repository.
-3. Render automatically discovers `render.yaml` and configures the `sanitas-api` web service.
-4. When prompted for environment variables marked with `sync: false`, provide:
-   - `GEMINI_API_KEY`: Your Google Gemini API key.
-   - `CORS_ALLOWED_ORIGINS`: Your Vercel frontend URL (or `http://localhost:3000` initially).
-5. Click **Apply**.
-
-#### Option B: Manual Setup via Render Dashboard
-1. Click **New > Web Service** and select the Sanitas repository.
-2. In service settings:
-   - **Name**: `sanitas-api`
-   - **Root Directory**: `apps/api`
-   - **Runtime**: `Python` (Python 3.12 detected via `.python-version`)
-   - **Build Command**: `pip install -r requirements.txt`
-   - **Start Command**: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-   - **Health Check Path**: `/health`
-3. Configure Environment Variables:
-   - `GEMINI_API_KEY`: Your Google Gemini API key.
-   - `GEMINI_MODEL`: `gemini-3.8-flash`
-   - `CORS_ALLOWED_ORIGINS`: `http://localhost:3000` (update to the production Vercel frontend URL once deployed).
-   - `MAX_TEXT_CHARS`: `50000`
-   - `MODEL_TIMEOUT_SECONDS`: `90`
-   - `APP_ENV`: `production`
-   - `APP_VERSION`: `0.1.0`
-   - `LOG_LEVEL`: `INFO`
-4. Click **Create Web Service**.
-5. Once deployed, verify service liveness by opening: `https://<render-service-name>.onrender.com/health`.
-
-### 2. Frontend Deployment on Vercel
-
-The frontend is deployed to **Vercel** from `apps/web`:
-
-1. In the [Vercel Dashboard](https://vercel.com/dashboard), click **Add New... > Project** and import the Sanitas repository.
-2. In **Project Settings**:
-   - **Framework Preset**: `Next.js` (explicitly declared via `apps/web/vercel.json`; do not leave as `Other`).
-   - **Root Directory**: `apps/web`
-   - **Output Directory**: Leave override **OFF** (Next.js automatically outputs to `.next`).
-   - **Build Command**: Leave override **OFF** (runs `next build` automatically).
-3. Configure **Environment Variables**:
-   - `NEXT_PUBLIC_API_BASE_URL`: `https://<render-service-name>.onrender.com` (your deployed Render backend URL).
-4. Click **Deploy**.
-5. After the frontend finishes deploying, return to your Render Dashboard and update `CORS_ALLOWED_ORIGINS` to include your production Vercel URL (e.g. `https://<sanitas-frontend>.vercel.app`), then redeploy the backend if needed.
-
-## Clinical Safety & Limitations
-
-- **Synthetic Data Only:** Sanitas is built strictly for evaluation and research on synthetic clinical notes. Do not submit Protected Health Information (PHI) or real patient records.
-- **No Diagnostic or Treatment Authority:** Sanitas does not provide medical advice, diagnosis, or clinical management recommendations.
-- **Render Free Tier Spin-Down:** On Render's free tier, inactive services spin down after 15 minutes of inactivity and may take 50+ seconds to cold-start on the next request. For uninterrupted evaluation, Render credits or a paid instance can be utilized.
-- **Scope Discipline:** File uploads (PDF/images), OCR pipelines, database persistence, and user history are deferred from this vertical slice.
+- **Synthetic Clinical Data Exclusively:** Sanitas is built strictly for research and evaluation on synthetic clinical documents. Do not input real patient data or Protected Health Information (PHI).
+- **No Prescriptive Authority:** Sanitas does not provide medical advice, establish clinical diagnoses, or direct patient treatment.
+- **Fail-Closed Verification:** Extracted claims failing deterministic evidence verification fail closed and are not presented as verified facts.

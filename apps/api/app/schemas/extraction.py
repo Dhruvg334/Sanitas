@@ -2,7 +2,7 @@
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, computed_field
 
 Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
 
@@ -104,15 +104,100 @@ class ClinicalExtraction(StrictModel):
 
 
 class SourceSegment(StrictModel):
-    segment_id: str
-    page_number: Literal[1] = 1
+    segment_id: str = Field(pattern=r"^p[1-9][0-9]*-s[1-9][0-9]*$")
+    page_number: int = Field(default=1, ge=1)
     text: str
+    segment_type: Literal["paragraph", "heading", "table_row", "list_item", "form_field", "other"] = "paragraph"
+    certainty: Literal["high", "medium", "low"] = "high"
+
+
+class CanonicalPage(StrictModel):
+    page_number: int = Field(ge=1)
+    segments: list[SourceSegment] = Field(default_factory=list)
+    unreadable_regions: list[str] = Field(default_factory=list)
 
 
 class CanonicalDocument(StrictModel):
+    model_config = ConfigDict(extra="ignore")
     schema_version: Literal["1.0"] = "1.0"
-    source_type: Literal["plain_text"] = "plain_text"
-    segments: list[SourceSegment]
+    source_type: Literal["plain_text", "digital_pdf", "scanned_or_visual_pdf", "image"] = "plain_text"
+    document_quality: Literal["good", "degraded", "poor"] = "good"
+    quality_issues: list[str] = Field(default_factory=list)
+    pages: list[CanonicalPage] = Field(default_factory=list)
+
+    def __init__(self, **data):
+        # Support shorthand initialization: CanonicalDocument(segments=[...])
+        if "segments" in data and "pages" not in data:
+            raw_segments = data.pop("segments")
+            pages_dict: dict[int, list[SourceSegment]] = {}
+            for s in raw_segments:
+                p_num = getattr(s, "page_number", 1) if isinstance(s, SourceSegment) else s.get("page_number", 1)
+                pages_dict.setdefault(p_num, []).append(s)
+            data["pages"] = [
+                CanonicalPage(page_number=p_num, segments=s_list)
+                for p_num, s_list in sorted(pages_dict.items())
+            ] or [CanonicalPage(page_number=1, segments=[])]
+        super().__init__(**data)
+
+    @computed_field
+    @property
+    def segments(self) -> list[SourceSegment]:
+        return [seg for page in self.pages for seg in page.segments]
+
+
+class ClinicalConcern(StrictModel):
+    finding_id: str = Field(pattern=r"^concern-[0-9]+$")
+    title: str = Field(min_length=1)
+    description: str = Field(min_length=1)
+    importance: Literal["low", "moderate", "high"]
+    related_entity_ids: list[str] = Field(default_factory=list)
+    evidence: list[EvidenceRef] = Field(min_length=1)
+
+
+class MissingInformation(StrictModel):
+    finding_id: str = Field(pattern=r"^missing-[0-9]+$")
+    field: str = Field(min_length=1)
+    reason: str = Field(min_length=1)
+    importance: Literal["low", "moderate", "high"]
+
+
+class PotentialInconsistency(StrictModel):
+    finding_id: str = Field(pattern=r"^incon-[0-9]+$")
+    description: str = Field(min_length=1)
+    importance: Literal["low", "moderate", "high"]
+    related_entity_ids: list[str] = Field(default_factory=list)
+    evidence: list[EvidenceRef] = Field(min_length=2)
+
+
+class ReviewItem(StrictModel):
+    finding_id: str = Field(pattern=r"^review-[0-9]+$")
+    title: str = Field(min_length=1)
+    reason: str = Field(min_length=1)
+    importance: Literal["low", "moderate", "high"]
+    related_entity_ids: list[str] = Field(default_factory=list)
+    evidence: list[EvidenceRef] = Field(default_factory=list)
+
+
+class ClinicalReview(StrictModel):
+    schema_version: Literal["1.0"] = "1.0"
+    report_summary: str = Field(min_length=1, max_length=1200)
+    clinical_concerns: list[ClinicalConcern] = Field(default_factory=list)
+    missing_information: list[MissingInformation] = Field(default_factory=list)
+    potential_inconsistencies: list[PotentialInconsistency] = Field(default_factory=list)
+    requires_review: list[ReviewItem] = Field(default_factory=list)
+
+
+class SourceMetadata(StrictModel):
+    source_type: Literal["plain_text", "digital_pdf", "scanned_or_visual_pdf", "image"]
+    original_filename: str | None = None
+    sha256: str
+    size_bytes: int | None = None
+    page_count: int | None = None
+
+
+class DocumentQuality(StrictModel):
+    level: Literal["good", "degraded", "poor"] = "good"
+    issues: list[str] = Field(default_factory=list)
 
 
 class AnalysisRequest(StrictModel):
@@ -121,12 +206,53 @@ class AnalysisRequest(StrictModel):
 
 class Processing(StrictModel):
     model: str
-    prompt_version: str
+    prompt_version: str = "E1.1"
+    prompt_versions: dict[str, str | None] = Field(default_factory=dict)
+    timings_ms: dict[str, int] = Field(default_factory=dict)
 
 
 class AnalysisResponse(StrictModel):
     analysis_id: str
-    status: Literal["completed"] = "completed"
+    status: Literal["completed", "failed", "received"] = "completed"
+    created_at: str | None = None
+    completed_at: str | None = None
+    source: SourceMetadata | None = None
+    document_quality: DocumentQuality | None = None
     canonical_document: CanonicalDocument
     clinical_extraction: ClinicalExtraction
+    clinical_review: ClinicalReview | None = None
     processing: Processing
+
+
+class AnalysisListItem(StrictModel):
+    analysis_id: str
+    created_at: str
+    status: str
+    source_type: str
+    original_filename: str | None = None
+    report_summary: str | None = None
+
+
+class AnalysisListResponse(StrictModel):
+    items: list[AnalysisListItem]
+    next_cursor: str | None = None
+
+
+class SafeError(StrictModel):
+    code: str
+    message: str
+    recoverable: bool = True
+    suggestion: str | None = None
+    correlation_id: str
+
+
+class ErrorResponse(StrictModel):
+    error: SafeError
+
+
+class AnalysisStatusResponse(StrictModel):
+    analysis_id: str
+    status: str
+    updated_at: str
+    error: SafeError | None = None
+

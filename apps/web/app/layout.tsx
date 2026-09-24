@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import NavHeader from "./components/NavHeader";
 
 export const metadata: Metadata = {
-  title: "Sanitas",
+  title: "Sanitas | AI Clinical Document Reviewer",
   description:
-    "Sanitas: an evidence-grounded AI clinical document reviewer for synthetic data.",
+    "Evidence-grounded clinical document review with adaptive multimodal routing and deterministic verification.",
 };
 
 export default function RootLayout({
@@ -14,7 +15,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <NavHeader />
+        {children}
+      </body>
     </html>
   );
 }
