@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: sanitas-api
+    runtime: python
+    rootDir: apps/api
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    plan: free
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.10
+      - key: APP_ENV
+        value: production
+      - key: APP_VERSION
+        value: 0.1.0
+      - key: GEMINI_MODEL
+        value: gemini-3.8-flash
+      - key: MAX_TEXT_CHARS
+        value: "50000"
+      - key: MODEL_TIMEOUT_SECONDS
+        value: "90"
+      - key: LOG_LEVEL
+        value: INFO
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false

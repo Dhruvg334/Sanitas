@@ -2,12 +2,31 @@
 
 Sanitas is an AI clinical document reviewer for **synthetic data only**. This release implements the end-to-end clinical review vertical slice: synthetic plain-text clinical-note submission, deterministic canonicalization into source segments, Gemini-based schema-constrained extraction, deterministic source evidence verification, and an accessible frontend results interface with inspectable source quotes.
 
-## Architecture & Repository Structure
+## Architecture & Deployment Model
 
-- `apps/web/`: Next.js, React, and TypeScript frontend review interface.
-- `apps/api/`: Python 3.12 FastAPI service with deterministic canonicalization, Gemini structured extraction, evidence verification, and typed error handling.
-- `docs/`: architecture, technical decisions, AI design, and evaluation documentation.
-- `.github/workflows/ci.yml`: automated GitHub Actions workflow running identical local validation checks.
+Sanitas is structured for deployment across modern cloud platforms:
+
+- **Frontend**: Next.js 16 on **Vercel** (`apps/web`)
+- **Backend**: Python 3.12 FastAPI on **Render** (`apps/api` as a standard Uvicorn web service)
+- **AI Service**: Google **Gemini API** (`gemini-3.8-flash`)
+- **Database (Target)**: **Neon PostgreSQL** when analysis persistence and report history are added (*deferred from current slice*)
+
+```text
+Browser
+   │
+   ▼
+Next.js on Vercel (apps/web)
+   │
+   │  POST /api/v1/analyses {"text": "..."}
+   ▼
+FastAPI on Render (apps/api)
+   ├── Canonicalization (p1-s1, p1-s2, ...)
+   ├── Gemini API (Prompt E1.1, Schema-Constrained)
+   └── Deterministic Evidence Gate
+   │
+   ▼ [Future Increment]
+Neon PostgreSQL (Analysis persistence & history)
+```
 
 ## Implemented Product Slice
 
@@ -111,40 +130,58 @@ python -m app.smoke
 
 CI executes these same commands on every push and pull request. Mocked tests do not require external credentials or network connectivity.
 
-## Deployment to Vercel
+## Deployment Instructions
 
-Sanitas is deployed as two independent Vercel projects from the same GitHub repository.
+### 1. Backend Deployment on Render
 
-### 1. Backend Project (FastAPI)
+The backend runs as a conventional Python web service on **Render**, binding Uvicorn to `0.0.0.0:$PORT`.
 
-1. In the Vercel Dashboard, click **Add New... > Project** and import the Sanitas repository.
-2. In **Project Settings**:
-   - **Framework Preset**: Other (Vercel automatically detects FastAPI via `apps/api/pyproject.toml` and `requirements.txt`).
+#### Option A: Deploy via Blueprint (`render.yaml`)
+1. In the [Render Dashboard](https://dashboard.render.com), click **New > Blueprint**.
+2. Connect your Sanitas GitHub repository.
+3. Render automatically discovers `render.yaml` and configures the `sanitas-api` web service.
+4. When prompted for environment variables marked with `sync: false`, provide:
+   - `GEMINI_API_KEY`: Your Google Gemini API key.
+   - `CORS_ALLOWED_ORIGINS`: Your Vercel frontend URL (or `http://localhost:3000` initially).
+5. Click **Apply**.
+
+#### Option B: Manual Setup via Render Dashboard
+1. Click **New > Web Service** and select the Sanitas repository.
+2. In service settings:
+   - **Name**: `sanitas-api`
    - **Root Directory**: `apps/api`
-3. Configure **Environment Variables**:
+   - **Runtime**: `Python` (Python 3.12 detected via `.python-version`)
+   - **Build Command**: `pip install -r requirements.txt`
+   - **Start Command**: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+   - **Health Check Path**: `/health`
+3. Configure Environment Variables:
    - `GEMINI_API_KEY`: Your Google Gemini API key.
    - `GEMINI_MODEL`: `gemini-3.8-flash`
-   - `CORS_ALLOWED_ORIGINS`: `http://localhost:3000` (update to the production frontend URL once deployed).
+   - `CORS_ALLOWED_ORIGINS`: `http://localhost:3000` (update to the production Vercel frontend URL once deployed).
    - `MAX_TEXT_CHARS`: `50000`
    - `MODEL_TIMEOUT_SECONDS`: `90`
    - `APP_ENV`: `production`
    - `APP_VERSION`: `0.1.0`
-4. Click **Deploy**.
-5. Once deployed, verify liveness by opening: `https://<backend-domain>.vercel.app/health`.
+   - `LOG_LEVEL`: `INFO`
+4. Click **Create Web Service**.
+5. Once deployed, verify service liveness by opening: `https://<render-service-name>.onrender.com/health`.
 
-### 2. Frontend Project (Next.js)
+### 2. Frontend Deployment on Vercel
 
-1. In the Vercel Dashboard, click **Add New... > Project** and import the same Sanitas repository.
+The frontend is deployed to **Vercel** from `apps/web`:
+
+1. In the [Vercel Dashboard](https://vercel.com/dashboard), click **Add New... > Project** and import the Sanitas repository.
 2. In **Project Settings**:
    - **Framework Preset**: `Next.js`
    - **Root Directory**: `apps/web`
 3. Configure **Environment Variables**:
-   - `NEXT_PUBLIC_API_BASE_URL`: `https://<backend-domain>.vercel.app` (the production backend domain from Step 1).
+   - `NEXT_PUBLIC_API_BASE_URL`: `https://<render-service-name>.onrender.com` (your deployed Render backend URL).
 4. Click **Deploy**.
-5. After deployment, update `CORS_ALLOWED_ORIGINS` in the Backend Project Settings to include `https://<frontend-domain>.vercel.app`, and redeploy the backend if needed.
+5. After the frontend finishes deploying, return to your Render Dashboard and update `CORS_ALLOWED_ORIGINS` to include your production Vercel URL (e.g. `https://<sanitas-frontend>.vercel.app`), then redeploy the backend if needed.
 
 ## Clinical Safety & Limitations
 
 - **Synthetic Data Only:** Sanitas is built strictly for evaluation and research on synthetic clinical notes. Do not submit Protected Health Information (PHI) or real patient records.
 - **No Diagnostic or Treatment Authority:** Sanitas does not provide medical advice, diagnosis, or clinical management recommendations.
+- **Render Free Tier Spin-Down:** On Render's free tier, inactive services spin down after 15 minutes of inactivity and may take 50+ seconds to cold-start on the next request. For uninterrupted evaluation, Render credits or a paid instance can be utilized.
 - **Scope Discipline:** File uploads (PDF/images), OCR pipelines, database persistence, and user history are deferred from this vertical slice.

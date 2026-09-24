@@ -1,12 +1,19 @@
 # Technical Decisions
 
-## Independent Deployable Applications on Vercel
+## Hosting: Vercel for Next.js and Render for FastAPI
 
-Next.js/TypeScript (`apps/web`) and FastAPI/Python (`apps/api`) are maintained in a monorepo but deploy as two independent Vercel projects:
-- **Frontend Project:** Vercel Next.js framework preset targeting root directory `apps/web`. Uses `NEXT_PUBLIC_API_BASE_URL` to route requests to the deployed backend.
-- **Backend Project:** Vercel Python runtime targeting root directory `apps/api`. Uses standard Vercel framework preset configuration (`[tool.vercel] entrypoint = "app.main:app"` in `pyproject.toml`) and `functions` maxDuration configuration in `vercel.json`.
+### Decision
+Deploy the Next.js frontend (`apps/web`) to **Vercel** and the FastAPI backend (`apps/api`) to **Render**, targeting **Neon PostgreSQL** for future database persistence.
 
-This maintains loose coupling between UI presentation and backend AI processing without requiring complex server orchestration.
+### Architectural Rationale
+- **Vercel for Frontend:** Vercel is the native platform for Next.js App Router applications, providing optimized static asset delivery, incremental builds, edge routing, and simple domain/preview management.
+- **Render for Backend:** Sanitas backend workloads are planned to expand toward digital PDF parsing, document image handling, multimodal inference, database persistence, and longer-running processing pipelines. A conventional Python web-service runtime is an architectural fit superior to a serverless-function model for this backend profile:
+  - Render allows the FastAPI application to run as a standard long-lived Uvicorn service without serverless bundle-size limits, bespoke entrypoint shims, or aggressive execution cutoffs.
+  - Dependencies such as PyMuPDF, Pillow, and database connection pools operate reliably in a standard containerized Linux environment.
+- **Trade-offs & Known Limitations:**
+  - Free Render web services spin down after 15 minutes of inactivity and may take 50+ seconds to cold-start on the subsequent request. This is an understood deployment limitation of the free tier.
+  - Available Render evaluation credits or paid instance upgrades may be applied during reviewer evaluation to avoid or reduce cold-start latency.
+  - No guarantees are claimed regarding absolute uptime or latency on free-tier infrastructure.
 
 ## Reproducible Dependencies
 
@@ -24,8 +31,8 @@ uv is an isolated build/maintenance tool and is not required for production depl
 
 For this initial synthetic plain-text slice, analysis execution is synchronous:
 - Plain-text note payloads are bounded to 50,000 characters.
-- Structured Gemini model calls complete well within the serverless function timeout (default 90s, bounded to 120s maxDuration).
-- Avoiding an external queue (Celery, Redis) or persistence worker keeps the free-tier deployment operational with minimal infrastructure footprint and zero cold-start database friction.
+- Structured Gemini model calls complete well within the application timeout (default 90s, bounded to 300s).
+- Avoiding an external queue (Celery, Redis) keeps the initial deployment lightweight while remaining extensible to worker pools once heavier PDF/image ingestion is added.
 
 ## Deterministic Canonicalization & Evidence Verification
 
