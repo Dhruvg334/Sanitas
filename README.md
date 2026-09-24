@@ -172,8 +172,10 @@ The frontend is deployed to **Vercel** from `apps/web`:
 
 1. In the [Vercel Dashboard](https://vercel.com/dashboard), click **Add New... > Project** and import the Sanitas repository.
 2. In **Project Settings**:
-   - **Framework Preset**: `Next.js`
+   - **Framework Preset**: `Next.js` (explicitly declared via `apps/web/vercel.json`; do not leave as `Other`).
    - **Root Directory**: `apps/web`
+   - **Output Directory**: Leave override **OFF** (Next.js automatically outputs to `.next`).
+   - **Build Command**: Leave override **OFF** (runs `next build` automatically).
 3. Configure **Environment Variables**:
    - `NEXT_PUBLIC_API_BASE_URL`: `https://<render-service-name>.onrender.com` (your deployed Render backend URL).
 4. Click **Deploy**.
