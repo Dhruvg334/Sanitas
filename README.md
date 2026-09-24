@@ -90,19 +90,21 @@ apps/api/.env.example  -> apps/api/.env
 
 Do not commit real secrets.
 
-## Engineering context
 
-Before implementation, read:
+## Documentation
+
+Public project documentation lives in:
 
 ```text
-docs/context/README_CONTEXT.md
-docs/context/02-SRS.md
-docs/context/03-tech-stack-decisions.md
-docs/context/04-system-architecture.md
-docs/context/05-pipeline-specification.md
-docs/context/14-ADR-log.md
-docs/context/18-current-status.md
-docs/context/19-agentic-build-instructions.md
+docs/
+├── architecture.md
+├── ai-design.md
+├── evaluation.md
+└── technical-decisions.md
 ```
 
-The documents and machine-readable schemas under `docs/context/` are the implementation source of truth.
+These documents are updated as the implementation evolves and describe the current tested system.
+
+## Development status
+
+The repository currently contains the frontend/backend foundation. Clinical document processing and AI review capabilities are added iteratively and are documented only after they exist in code.

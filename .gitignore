@@ -50,3 +50,6 @@ eval-results/
 
 # Vercel
 .vercel/
+
+# Local agent/project workspace
+.project/
