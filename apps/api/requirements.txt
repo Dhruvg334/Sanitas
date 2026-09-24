@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+sqlalchemy
+alembic
+psycopg[binary]
+structlog
+tenacity
+pymupdf
+pillow
+filetype
+google-genai
+python-multipart
+pytest
+httpx
