@@ -12,6 +12,7 @@ import {
   IconCopy,
   IconCheck,
   IconClose,
+  IconSparkles,
 } from "../components/Icons";
 
 interface SafeError {
@@ -39,8 +40,8 @@ interface DemoPreset {
 const DEMO_PRESETS: DemoPreset[] = [
   {
     id: "ambulatory",
-    label: "Ambulatory Follow-up",
-    category: "General Practice",
+    label: "Elena Rostova",
+    category: "Ambulatory Review • Type 2 Diabetes",
     description: "Elena Rostova: 54yo female, Type 2 Diabetes, Metformin, discontinued Lisinopril, headache.",
     text: `Patient: Elena Rostova
 Age: 54 | DOB: 1972-04-12 | MRN: SYN-88421 | Sex: Female
@@ -66,8 +67,8 @@ Patient unsure whether current headache is related to recent reduction in daily 
   },
   {
     id: "allergy_conflict",
-    label: "Allergy Inconsistency Case",
-    category: "Contradiction Detection",
+    label: "Marcus Vance",
+    category: "Allergy Conflict • NKDA vs Amoxicillin",
     description: "Marcus Vance: Header notes NKDA, but encounter documents acute anaphylactoid reaction to Amoxicillin.",
     text: `PATIENT CLINICAL SUMMARY
 Patient Name: Marcus Vance
@@ -86,8 +87,8 @@ Update allergy record immediately: Penicillin class antibiotics strictly contrai
   },
   {
     id: "medication_conflict",
-    label: "Medication Status Conflict",
-    category: "Contradiction Detection",
+    label: "Sarah Jenkins",
+    category: "Medication Conflict • Lisinopril vs Losartan",
     description: "Sarah Jenkins: Lisinopril listed as active daily, yet discharge instructions order immediate discontinuation.",
     text: `PROGRESS & DISCHARGE RECORD
 Patient: Sarah Jenkins | Age: 61 | Sex: Female | MRN: SYN-30419
@@ -106,8 +107,8 @@ Follow up with primary care in 3 weeks with repeat basic metabolic panel.`,
   },
   {
     id: "acute_abdomen",
-    label: "Emergency Acute Abdomen",
-    category: "Emergency Triage",
+    label: "David Miller",
+    category: "Emergency Triage • Acute Appendicitis",
     description: "David Miller: 29yo male, severe right lower quadrant abdominal pain, rebound tenderness, surgical consult.",
     text: `EMERGENCY DEPARTMENT ENCOUNTER
 Patient: David Miller | Age: 29 | Sex: Male | MRN: SYN-11894
@@ -281,14 +282,41 @@ export default function WorkbenchPage() {
   return (
     <main className="main-container">
       {/* Workbench Header */}
-      <div style={{ marginBottom: "20px" }}>
+      <div style={{ marginBottom: "16px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
           <span className="badge-neo badge-neo-scope2" style={{ fontSize: "0.75rem" }}>Review Environment</span>
         </div>
-        <h1 style={{ fontSize: "2rem", margin: 0 }}>Clinical Review Workbench</h1>
+        <h1 style={{ fontSize: "2.1rem", margin: 0 }}>Clinical Review Workbench</h1>
         <p style={{ color: "var(--text-muted)", margin: "4px 0 0", fontSize: "0.92rem" }}>
           Ingest clinical documents, extract structured medical entities, and verify evidence quotes against immutable source lines.
         </p>
+      </div>
+
+      {/* Workbench System Readiness Status Bar */}
+      <div className="workbench-status-bar">
+        <div className="workbench-status-left">
+          <div className="workbench-status-item">
+            <span className="status-live-dot" />
+            <span>Target API: <code>{apiBaseUrl}</code></span>
+          </div>
+          <div className="workbench-status-item" style={{ color: "var(--text-muted)" }}>
+            <span>•</span>
+          </div>
+          <div className="workbench-status-item">
+            <IconShieldCheck size={14} color="var(--emerald)" />
+            <span>Evidence Grounding Gate: Active</span>
+          </div>
+          <div className="workbench-status-item" style={{ color: "var(--text-muted)" }}>
+            <span>•</span>
+          </div>
+          <div className="workbench-status-item">
+            <IconSparkles size={14} color="var(--emerald)" />
+            <span>Two-Pass Gemini AI: Enforced</span>
+          </div>
+        </div>
+        <div style={{ fontSize: "0.74rem", fontWeight: 700, color: "var(--text-muted)" }}>
+          Plain text (50k chars) • Digital PDF • Image Scans (10 MB)
+        </div>
       </div>
 
       {/* Error Alert Box */}
@@ -306,6 +334,14 @@ export default function WorkbenchPage() {
             <p className="error-suggestion">
               <strong>Actionable Suggestion:</strong> {apiError.suggestion}
             </p>
+          )}
+          {apiError.code === "MODEL_UNAVAILABLE" && (
+            <div style={{ marginTop: "12px", padding: "12px 16px", background: "#FFFFFF", borderRadius: "6px", border: "1.5px solid #F87171", fontSize: "0.85rem", color: "var(--primary-dark)" }}>
+              <strong style={{ color: "#991B1B" }}>Render Deployment Configuration Notice:</strong>
+              <p style={{ margin: "4px 0 0", color: "var(--text-dark)", lineHeight: 1.5 }}>
+                The backend service on Render is reachable, but requires <code>GEMINI_API_KEY</code> set in the Render Dashboard under <em>sanitas-api &rarr; Environment</em>. Once configured, live extraction and contradiction analysis will execute automatically.
+              </p>
+            </div>
           )}
           <div className="error-id">Tracking Correlation ID: {apiError.correlation_id}</div>
         </div>
@@ -349,21 +385,27 @@ export default function WorkbenchPage() {
 
           {!analysis ? (
             <div>
-              {/* Sample Cases Selector - Clean and Minimal */}
-              <div className="sample-presets-bar">
-                <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--primary-dark)" }}>
-                  Sample Cases:
-                </span>
-                <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+              {/* Sample Cases Selector - Rich 2x2 Grid */}
+              <div style={{ marginBottom: "18px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                  <span style={{ fontSize: "0.78rem", fontWeight: 800, color: "var(--primary-dark)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                    Select Sample Encounter:
+                  </span>
+                  <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", fontWeight: 600 }}>
+                    Click to load into editor
+                  </span>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "8px" }}>
                   {DEMO_PRESETS.map((p) => (
                     <button
                       key={p.id}
                       type="button"
-                      className={`sample-preset-btn ${activePreset === p.id ? "active" : ""}`}
+                      className={`sample-preset-btn-rich ${activePreset === p.id ? "active" : ""}`}
                       onClick={() => handleSelectPreset(p)}
                       title={p.description}
                     >
-                      {p.label}
+                      <span className="sample-preset-title">{p.label}</span>
+                      <span className="sample-preset-tag">{p.category}</span>
                     </button>
                   ))}
                 </div>
@@ -674,21 +716,78 @@ export default function WorkbenchPage() {
           )}
 
           {!isLoading && !analysis && (
-            <div className="card-neo empty-state-box">
-              <div className="empty-state-icon-box">
-                <IconShieldCheck size={32} color="var(--primary-dark)" />
+            <div className="workbench-cockpit-box">
+              <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
+                <div className="empty-state-icon-box" style={{ width: "46px", height: "46px", marginBottom: 0 }}>
+                  <IconShieldCheck size={26} color="var(--primary-dark)" />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: "1.25rem", margin: 0, color: "var(--primary-dark)" }}>
+                    Clinical Intelligence Cockpit
+                  </h3>
+                  <p style={{ fontSize: "0.84rem", color: "var(--text-muted)", margin: 0 }}>
+                    Select a sample encounter on the left or paste your clinical record to review.
+                  </p>
+                </div>
               </div>
-              <h3 className="empty-state-title">Ready for Document Review</h3>
-              <p className="empty-state-text">
-                Select a sample case on the left or paste/upload a clinical document. The pipeline will extract medical entities, verify evidence quotes against source text, and detect factual contradictions.
-              </p>
-              <div style={{ display: "flex", gap: "10px", justifyContent: "center", marginTop: "24px" }}>
+
+              <div className="cockpit-preview-grid">
+                <div className="cockpit-feature-card">
+                  <div className="cockpit-feature-header">
+                    <IconFileText size={18} color="var(--emerald)" />
+                    <span className="cockpit-feature-title">Fact Extraction</span>
+                  </div>
+                  <p className="cockpit-feature-desc">
+                    Schema-governed extraction of demographics, diagnoses, active medications, vitals, and documented allergies.
+                  </p>
+                </div>
+
+                <div className="cockpit-feature-card">
+                  <div className="cockpit-feature-header">
+                    <IconShieldCheck size={18} color="var(--emerald)" />
+                    <span className="cockpit-feature-title">Evidence Grounding</span>
+                  </div>
+                  <p className="cockpit-feature-desc">
+                    Every entity links mathematically to verbatim substring quotes matching immutable canonical source lines.
+                  </p>
+                </div>
+
+                <div className="cockpit-feature-card">
+                  <div className="cockpit-feature-header">
+                    <IconAlertTriangle size={18} color="var(--alert-red)" />
+                    <span className="cockpit-feature-title">Conflict Detection</span>
+                  </div>
+                  <p className="cockpit-feature-desc">
+                    Deterministic rule checks for intake vs encounter allergy conflicts and active vs discontinued medication discrepancies.
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ background: "var(--mint-light)", border: "1.5px solid #CBD5E1", borderRadius: "8px", padding: "14px 16px", marginBottom: "22px" }}>
+                <div style={{ fontSize: "0.78rem", fontWeight: 800, textTransform: "uppercase", color: "var(--primary-dark)", letterSpacing: "0.04em", marginBottom: "6px" }}>
+                  Live Evidence Verification Specimen
+                </div>
+                <div style={{ fontFamily: "monospace", fontSize: "0.82rem", color: "#0F382A", background: "#FFFFFF", padding: "8px 12px", borderRadius: "6px", border: "1px solid #CBD5E1" }}>
+                  “Metformin 1000 mg oral tablet twice daily with meals.” &rarr; <span style={{ color: "var(--emerald)", fontWeight: 700 }}>Segment p1-s5 Verified</span>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: "10px", justifyContent: "flex-start", alignItems: "center", flexWrap: "wrap" }}>
                 <button
                   type="button"
-                  className="btn-neo btn-neo-sm btn-neo-primary"
+                  className="btn-neo btn-neo-primary"
                   onClick={() => handleSelectPreset(DEMO_PRESETS[0])}
+                  style={{ fontWeight: 800, display: "inline-flex", alignItems: "center", gap: "8px" }}
                 >
-                  Load Elena Rostova
+                  <span>Load Elena Rostova &amp; Review</span>
+                  <IconArrowRight size={16} />
+                </button>
+                <button
+                  type="button"
+                  className="btn-neo btn-neo-secondary btn-neo-sm"
+                  onClick={() => handleSelectPreset(DEMO_PRESETS[1])}
+                >
+                  Test Allergy Inconsistency
                 </button>
               </div>
             </div>

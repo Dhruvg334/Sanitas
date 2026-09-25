@@ -33,7 +33,19 @@ export default function HistoryPage() {
         cache: "no-store",
       });
       if (!res.ok) {
-        throw new Error(`Failed to load history (Status ${res.status})`);
+        let errDesc = `Failed to load history (Status ${res.status})`;
+        try {
+          const errData = await res.json();
+          if (errData?.error?.code === "DATABASE_UNAVAILABLE") {
+            errDesc = "PostgreSQL Database Connection Not Configured on Render. Persistence and historical ledger records require a DATABASE_URL connection string in the Render Dashboard environment settings (under sanitas-api -> Environment). Live document review in the Workbench remains functional once GEMINI_API_KEY is configured.";
+          } else if (errData?.error?.message) {
+            errDesc = `${errData.error.message} (${errData.error.code})`;
+          }
+        } catch {
+          // Keep default message
+        }
+        setError(errDesc);
+        return;
       }
       const data: AnalysisListResponse = await res.json();
       setItems(data.items || []);
@@ -53,7 +65,19 @@ export default function HistoryPage() {
           cache: "no-store",
         });
         if (!res.ok) {
-          throw new Error(`Failed to load history (Status ${res.status})`);
+          let errDesc = `Failed to load history (Status ${res.status})`;
+          try {
+            const errData = await res.json();
+            if (errData?.error?.code === "DATABASE_UNAVAILABLE") {
+              errDesc = "PostgreSQL Database Connection Not Configured on Render. Persistence and historical ledger records require a DATABASE_URL connection string in the Render Dashboard environment settings (under sanitas-api -> Environment). Live document review in the Workbench remains functional once GEMINI_API_KEY is configured.";
+            } else if (errData?.error?.message) {
+              errDesc = `${errData.error.message} (${errData.error.code})`;
+            }
+          } catch {
+            // Keep default message
+          }
+          if (!ignore) setError(errDesc);
+          return;
         }
         const data: AnalysisListResponse = await res.json();
         if (!ignore) {

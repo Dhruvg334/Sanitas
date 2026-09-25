@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import NavHeader from "./components/NavHeader";
+import Footer from "./components/Footer";
 
 export const metadata: Metadata = {
   title: "Sanitas | AI Clinical Document Reviewer",
@@ -23,6 +24,7 @@ export default function RootLayout({
       <body>
         <NavHeader />
         {children}
+        <Footer />
       </body>
     </html>
   );
