@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import PageGuideBanner from "../components/PageGuideBanner";
 
 interface AnalysisListItem {
   analysis_id: string;
@@ -78,17 +77,6 @@ export default function HistoryPage() {
 
   return (
     <main className="main-container">
-      <PageGuideBanner
-        pageKey="history"
-        title="Audit History Ledger"
-        description="Inspect previously analyzed synthetic documents persisted in Neon PostgreSQL. Click any record to reopen its complete evidence-grounded review."
-        onOpenGuide={(tab) => {
-          if (typeof window !== "undefined") {
-            window.dispatchEvent(new CustomEvent("open-sanitas-guide", { detail: { tab } }));
-          }
-        }}
-      />
-
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "28px", flexWrap: "wrap", gap: "16px" }}>
         <div>
           <span className="badge-neo badge-neo-scope2">Audit Log &amp; Persistence</span>

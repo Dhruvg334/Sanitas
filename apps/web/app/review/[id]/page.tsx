@@ -3,7 +3,6 @@
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import ReviewReportView, { AnalysisResponse } from "../../components/ReviewReportView";
-import PageGuideBanner from "../../components/PageGuideBanner";
 
 export default function DurableReviewPage({
   params,
@@ -60,16 +59,6 @@ export default function DurableReviewPage({
 
   return (
     <main className="main-container">
-      <PageGuideBanner
-        pageKey="review"
-        title="Durable Clinical Review Permalink"
-        description="This verified review is permanently stored in Neon PostgreSQL and reloadable without re-running model inference. Click evidence pills to highlight source segments."
-        onOpenGuide={(tab) => {
-          if (typeof window !== "undefined") {
-            window.dispatchEvent(new CustomEvent("open-sanitas-guide", { detail: { tab } }));
-          }
-        }}
-      />
       {/* Top Header Navigation */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px", flexWrap: "wrap", gap: "14px" }}>
         <div>

@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import MermaidChart from "../components/MermaidChart";
-import PageGuideBanner from "../components/PageGuideBanner";
 
 const TOPOLOGY_DIAGRAM = `flowchart TD
     subgraph Client["Reviewer Client Interface"]
@@ -144,22 +143,8 @@ export default function DocsPage() {
     "architecture" | "pipeline" | "router" | "twopass" | "evidence" | "persistence" | "evaluation" | "api"
   >("architecture");
 
-  const handleOpenGuide = (tab: "overview" | "workbench" | "history" | "review" | "docs" | "safety") => {
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("open-sanitas-guide", { detail: { tab } }));
-    }
-  };
-
   return (
     <main className="docs-container" style={{ maxWidth: "1240px", margin: "24px auto 80px", padding: "0 24px" }}>
-      {/* Page Guide Banner */}
-      <PageGuideBanner
-        pageKey="docs"
-        title="Technical Documentation"
-        description="Comprehensive architectural specifications, two-pass pipeline mechanics, deterministic evidence verification math, and REST API contracts for Sanitas."
-        onOpenGuide={handleOpenGuide}
-      />
-
       {/* Title Header */}
       <div style={{ textAlign: "center", marginBottom: "28px" }}>
         <span className="badge-neo badge-neo-scope2">Engineering &amp; System Specification</span>
@@ -171,66 +156,87 @@ export default function DocsPage() {
         </p>
       </div>
 
-      {/* Subpage Mini-Nav / Tabs */}
-      <div className="mini-nav-container">
-        <nav className="mini-nav">
-          <button
-            type="button"
-            className={`tab-btn ${activeTab === "architecture" ? "active" : ""}`}
-            onClick={() => setActiveTab("architecture")}
-          >
-            1. Topology &amp; Hosting
-          </button>
-          <button
-            type="button"
-            className={`tab-btn ${activeTab === "pipeline" ? "active" : ""}`}
-            onClick={() => setActiveTab("pipeline")}
-          >
-            2. 7-Stage Pipeline
-          </button>
-          <button
-            type="button"
-            className={`tab-btn ${activeTab === "router" ? "active" : ""}`}
-            onClick={() => setActiveTab("router")}
-          >
-            3. Ingestion &amp; Memory
-          </button>
-          <button
-            type="button"
-            className={`tab-btn ${activeTab === "twopass" ? "active" : ""}`}
-            onClick={() => setActiveTab("twopass")}
-          >
-            4. Two-Pass AI &amp; Prompts
-          </button>
-          <button
-            type="button"
-            className={`tab-btn ${activeTab === "evidence" ? "active" : ""}`}
-            onClick={() => setActiveTab("evidence")}
-          >
-            5. Evidence &amp; Contradictions
-          </button>
-          <button
-            type="button"
-            className={`tab-btn ${activeTab === "persistence" ? "active" : ""}`}
-            onClick={() => setActiveTab("persistence")}
-          >
-            6. Persistence &amp; Schema
-          </button>
-          <button
-            type="button"
-            className={`tab-btn ${activeTab === "evaluation" ? "active" : ""}`}
-            onClick={() => setActiveTab("evaluation")}
-          >
-            7. Evaluation &amp; Safety
-          </button>
-          <button
-            type="button"
-            className={`tab-btn ${activeTab === "api" ? "active" : ""}`}
-            onClick={() => setActiveTab("api")}
-          >
-            8. REST API Reference
-          </button>
-        </nav>
+      {/* Organized Domain Navigation Grid */}
+      <div className="docs-nav-card">
+        <div className="docs-nav-group">
+          <span className="docs-nav-group-label">Architecture</span>
+          <div className="docs-nav-buttons">
+            <button
+              type="button"
+              className={`docs-sub-btn ${activeTab === "architecture" ? "active" : ""}`}
+              onClick={() => setActiveTab("architecture")}
+            >
+              1. Topology &amp; Hosting
+            </button>
+            <button
+              type="button"
+              className={`docs-sub-btn ${activeTab === "pipeline" ? "active" : ""}`}
+              onClick={() => setActiveTab("pipeline")}
+            >
+              2. 7-Stage Pipeline
+            </button>
+          </div>
+        </div>
+
+        <div className="docs-nav-group">
+          <span className="docs-nav-group-label">AI &amp; Intake</span>
+          <div className="docs-nav-buttons">
+            <button
+              type="button"
+              className={`docs-sub-btn ${activeTab === "router" ? "active" : ""}`}
+              onClick={() => setActiveTab("router")}
+            >
+              3. Ingestion &amp; Memory
+            </button>
+            <button
+              type="button"
+              className={`docs-sub-btn ${activeTab === "twopass" ? "active" : ""}`}
+              onClick={() => setActiveTab("twopass")}
+            >
+              4. Two-Pass AI &amp; Prompts
+            </button>
+          </div>
+        </div>
+
+        <div className="docs-nav-group">
+          <span className="docs-nav-group-label">Verification</span>
+          <div className="docs-nav-buttons">
+            <button
+              type="button"
+              className={`docs-sub-btn ${activeTab === "evidence" ? "active" : ""}`}
+              onClick={() => setActiveTab("evidence")}
+            >
+              5. Evidence &amp; Contradictions
+            </button>
+            <button
+              type="button"
+              className={`docs-sub-btn ${activeTab === "evaluation" ? "active" : ""}`}
+              onClick={() => setActiveTab("evaluation")}
+            >
+              7. Evaluation &amp; Standards
+            </button>
+          </div>
+        </div>
+
+        <div className="docs-nav-group">
+          <span className="docs-nav-group-label">Data &amp; API</span>
+          <div className="docs-nav-buttons">
+            <button
+              type="button"
+              className={`docs-sub-btn ${activeTab === "persistence" ? "active" : ""}`}
+              onClick={() => setActiveTab("persistence")}
+            >
+              6. PostgreSQL Persistence
+            </button>
+            <button
+              type="button"
+              className={`docs-sub-btn ${activeTab === "api" ? "active" : ""}`}
+              onClick={() => setActiveTab("api")}
+            >
+              8. REST API Reference
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* TAB 1: SYSTEM ARCHITECTURE & TOPOLOGY */}
@@ -244,7 +250,7 @@ export default function DocsPage() {
             </p>
 
             <div className="mermaid-wrapper">
-              <MermaidChart chart={TOPOLOGY_DIAGRAM} />
+              <MermaidChart chart={TOPOLOGY_DIAGRAM} title="System Architecture & Hosting Topology" />
             </div>
 
             <div style={{ marginTop: "24px" }}>
@@ -303,7 +309,7 @@ export default function DocsPage() {
             </p>
 
             <div className="mermaid-wrapper">
-              <MermaidChart chart={PIPELINE_DIAGRAM} />
+              <MermaidChart chart={PIPELINE_DIAGRAM} title="7-Stage Clinical Review Pipeline Architecture" />
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginTop: "24px" }}>
@@ -374,7 +380,7 @@ export default function DocsPage() {
             </p>
 
             <div className="mermaid-wrapper">
-              <MermaidChart chart={ROUTER_FLOWCHART} />
+              <MermaidChart chart={ROUTER_FLOWCHART} title="Multi-Modal Adaptive Router & Ingestion Memory Flow" />
             </div>
 
             <div style={{ marginTop: "24px" }}>
@@ -424,7 +430,7 @@ export default function DocsPage() {
             </p>
 
             <div className="mermaid-wrapper">
-              <MermaidChart chart={TWOPASS_DIAGRAM} />
+              <MermaidChart chart={TWOPASS_DIAGRAM} title="Two-Pass AI Extraction & Review Synthesis Model" />
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginTop: "24px" }}>
@@ -480,7 +486,7 @@ export default function DocsPage() {
             </p>
 
             <div className="mermaid-wrapper">
-              <MermaidChart chart={EVIDENCE_SEQUENCE} />
+              <MermaidChart chart={EVIDENCE_SEQUENCE} title="Deterministic Evidence Verification Sequence" />
             </div>
 
             <div style={{ marginTop: "20px" }}>

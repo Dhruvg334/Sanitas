@@ -1,662 +1,290 @@
 "use client";
 
-import { useState, useRef } from "react";
-import ReviewReportView, { AnalysisResponse } from "./components/ReviewReportView";
-import PageGuideBanner from "./components/PageGuideBanner";
+import Link from "next/link";
 
-interface SafeError {
-  code: string;
-  message: string;
-  recoverable?: boolean;
-  suggestion?: string | null;
-  correlation_id: string;
-}
-
-interface ApiErrorResponse {
-  error: SafeError;
-}
-
-const MAX_TEXT_CHARS = 50000;
-
-interface DemoPreset {
-  id: string;
-  label: string;
-  category: string;
-  description: string;
-  text: string;
-}
-
-const DEMO_PRESETS: DemoPreset[] = [
+const BENCHMARK_CASES = [
   {
     id: "ambulatory",
-    label: "Ambulatory Follow-up",
-    category: "General Practice",
-    description: "Elena Rostova: 54yo female, Type 2 Diabetes, Metformin, discontinued Lisinopril, headache.",
-    text: `Patient: Elena Rostova
-Age: 54 | DOB: 1972-04-12 | MRN: SYN-88421 | Sex: Female
-Chief Complaint: Acute onset bilateral throbbing headache for past 3 days with mild photophobia.
-History of Present Illness:
-Patient diagnosed with Type 2 Diabetes Mellitus in 2018.
-Reports no history of hypertension or migraine.
-Current Medications:
-Metformin 1000 mg oral tablet twice daily with meals.
-Lisinopril 10 mg oral once daily, discontinued last month.
-Vital Signs:
-Blood Pressure: 128/82 mmHg
-Heart Rate: 74 bpm
-Respiratory Rate: 16 breaths/min
-Temperature: 98.4 F
-Oxygen Saturation: 99% on room air
-Allergies:
-No known drug allergies.
-Clinical Observations:
-Alert and oriented x4. Cranial nerves II-XII grossly intact. No focal neurological deficits.
-Uncertain Items:
-Patient unsure whether current headache is related to recent reduction in daily caffeine intake.`,
+    title: "Elena Rostova",
+    badge: "Ambulatory Encounter",
+    badgeType: "badge-neo-scope1",
+    scenario: "54yo female presenting with acute bilateral throbbing headache. Evaluates Type 2 Diabetes, Metformin therapy, and recent Lisinopril discontinuation.",
+    highlights: ["Type 2 Diabetes Mellitus", "Metformin 1000mg BID", "Discontinued Lisinopril", "Vitals Normal"],
   },
   {
     id: "allergy_conflict",
-    label: "Allergy Inconsistency Case",
-    category: "Contradiction Detection",
-    description: "Marcus Vance: Header notes NKDA, but encounter documents acute anaphylactoid reaction to Amoxicillin.",
-    text: `PATIENT CLINICAL SUMMARY
-Patient Name: Marcus Vance
-DOB: 1982-07-19 | Age: 42 | Sex: Male | MRN: SYN-49012
-ALLERGIES: NKDA (No Known Drug Allergies)
-Chief Complaint: Acute facial angioedema and diffuse pruritic urticaria.
-Encounter Narrative:
-Patient presented to urgent care 45 minutes after ingesting Amoxicillin 500mg oral capsule prescribed by dentist.
-Developed severe periorbital edema, lip swelling, and erythematous wheals over bilateral upper extremities.
-Assessment:
-1. Acute allergic drug reaction secondary to Amoxicillin.
-2. Contradictory intake documentation (intake sheet states NKDA).
-Plan:
-Administer diphenhydramine 50mg IM stat and dexamethasone 10mg IV.
-Update allergy record immediately: Penicillin class antibiotics strictly contraindicated.`,
+    title: "Marcus Vance",
+    badge: "Allergy Inconsistency",
+    badgeType: "badge-neo-high",
+    scenario: "42yo male urgent care encounter. Intake sheet documents NKDA, yet clinical narrative reports acute anaphylactoid reaction to Amoxicillin capsule.",
+    highlights: ["NKDA in Header vs Amoxicillin Allergy", "Facial Angioedema", "IM Diphenhydramine & IV Decadron", "Deterministic Rule P5 Trigger"],
   },
   {
     id: "medication_conflict",
-    label: "Medication Status Conflict",
-    category: "Contradiction Detection",
-    description: "Sarah Jenkins: Lisinopril listed as active daily, yet discharge instructions order immediate discontinuation.",
-    text: `PROGRESS & DISCHARGE RECORD
-Patient: Sarah Jenkins | Age: 61 | Sex: Female | MRN: SYN-30419
-Active Problem List: Essential Hypertension, Hyperlipidemia.
-Medications at Encounter Start:
-- Lisinopril 20 mg oral daily with breakfast.
-- Atorvastatin 20 mg oral daily at bedtime.
-Subjective & History:
-Patient reports a persistent, intractable, dry, non-productive nocturnal cough for 4 weeks.
-Exam:
-Lungs clear bilaterally. Oropharynx normal without erythema.
-Discharge Orders:
-Discontinue Lisinopril immediately due to suspected ACE-inhibitor induced cough.
-Initiate Losartan 50 mg oral daily as alternative angiotensin receptor blocker.
-Follow up with primary care in 3 weeks with repeat basic metabolic panel.`,
+    title: "Sarah Jenkins",
+    badge: "Medication Conflict",
+    badgeType: "badge-neo-high",
+    scenario: "61yo female with ACE-inhibitor induced dry cough. Active problem list lists Lisinopril daily, while discharge orders mandate immediate cessation.",
+    highlights: ["Lisinopril Active vs Discontinue Order", "Switch to Losartan 50mg", "Nocturnal Cough for 4 Weeks", "Follow-up BMP in 3 Weeks"],
   },
   {
     id: "acute_abdomen",
-    label: "Emergency Acute Abdomen",
-    category: "Emergency Triage",
-    description: "David Miller: 29yo male, severe right lower quadrant abdominal pain, rebound tenderness, surgical consult.",
-    text: `EMERGENCY DEPARTMENT ENCOUNTER
-Patient: David Miller | Age: 29 | Sex: Male | MRN: SYN-11894
-Triage Time: 02:40 AM
-Chief Complaint: Progressive worsening right lower quadrant abdominal pain for 14 hours.
-Associated Symptoms: Anorexia, nausea, two episodes of non-bloody vomiting. Denies diarrhea.
-Vital Signs:
-BP: 124/76 mmHg | HR: 104 bpm (sinus tachycardia) | RR: 20 /min | Temp: 100.9 F | SpO2: 99%
-Physical Examination:
-Abdomen: Flat. Markedly tender to palpation at McBurney point with localized involuntary guarding and positive Rovsing sign.
-Laboratory & Diagnostics:
-WBC: 14.8 x10^3/uL (neutrophilic leukocytosis).
-Impression:
-Acute appendicitis with localized peritoneal irritation.
-Plan:
-NPO status. Intravenous normal saline infusion at 125 mL/hr.
-Stat surgical consultation requested for diagnostic laparoscopy / appendectomy.`,
+    title: "David Miller",
+    badge: "Emergency Triage",
+    badgeType: "badge-neo-scope2",
+    scenario: "29yo male presenting with 14-hour progressive right lower quadrant pain, positive McBurney point tenderness, and leukocytosis (WBC 14.8k).",
+    highlights: ["Acute Appendicitis", "Positive Rovsing Sign", "WBC 14.8 x10^3/uL", "Stat Surgical Laparoscopy Consult"],
   },
 ];
 
-export default function WorkbenchPage() {
-  const [inputMode, setInputMode] = useState<"text" | "pdf" | "image">("text");
-  const [noteText, setNoteText] = useState(DEMO_PRESETS[0].text);
-  const [activePreset, setActivePreset] = useState<string>("ambulatory");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [apiError, setApiError] = useState<SafeError | null>(null);
-  const [networkError, setNetworkError] = useState<string | null>(null);
-  const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null);
-  const [highlightedSegment, setHighlightedSegment] = useState<string | null>(null);
-  const [copiedSegmentId, setCopiedSegmentId] = useState<string | null>(null);
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
-
-  const handleSelectPreset = (preset: DemoPreset) => {
-    setInputMode("text");
-    setActivePreset(preset.id);
-    setNoteText(preset.text);
-    setSelectedFile(null);
-    setImagePreview(null);
-    setApiError(null);
-    setNetworkError(null);
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setSelectedFile(file);
-    setActivePreset("");
-    setApiError(null);
-    setNetworkError(null);
-
-    if (file.type.startsWith("image/")) {
-      const reader = new FileReader();
-      reader.onload = () => setImagePreview(reader.result as string);
-      reader.readAsDataURL(file);
-    } else {
-      setImagePreview(null);
-    }
-  };
-
-  const handleClear = () => {
-    setNoteText("");
-    setActivePreset("");
-    setSelectedFile(null);
-    setImagePreview(null);
-    setApiError(null);
-    setNetworkError(null);
-    setAnalysis(null);
-    setHighlightedSegment(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  };
-
-  const handleCopySegment = (segText: string, segId: string) => {
-    if (navigator?.clipboard) {
-      navigator.clipboard.writeText(segText);
-      setCopiedSegmentId(segId);
-      setTimeout(() => setCopiedSegmentId(null), 1800);
-    }
-  };
-
-  const handleOpenGuide = (tab: "overview" | "workbench" | "history" | "review" | "docs" | "safety") => {
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("open-sanitas-guide", { detail: { tab } }));
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isLoading) return;
-
-    setIsLoading(true);
-    setApiError(null);
-    setNetworkError(null);
-    setHighlightedSegment(null);
-
-    try {
-      let res: Response;
-
-      if (inputMode === "text") {
-        if (!noteText.trim()) {
-          setIsLoading(false);
-          return;
-        }
-        res = await fetch(`${apiBaseUrl}/api/v1/analyses`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: noteText }),
-        });
-      } else {
-        if (!selectedFile) {
-          setIsLoading(false);
-          return;
-        }
-        const formData = new FormData();
-        formData.append("file", selectedFile);
-        res = await fetch(`${apiBaseUrl}/api/v1/analyses`, {
-          method: "POST",
-          body: formData,
-        });
-      }
-
-      if (!res.ok) {
-        try {
-          const errData: ApiErrorResponse = await res.json();
-          if (errData.error) {
-            setApiError(errData.error);
-          } else {
-            setNetworkError(`Request failed with status ${res.status}`);
-          }
-        } catch {
-          setNetworkError(`Request failed with status ${res.status} (${res.statusText})`);
-        }
-        return;
-      }
-
-      const data: AnalysisResponse = await res.json();
-      setAnalysis(data);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Network error";
-      setNetworkError(
-        `Unable to reach the Sanitas API at ${apiBaseUrl}. Ensure the backend service is running and CORS permits this origin. (${msg})`
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const charCount = noteText.length;
-  const isOverLimit = charCount > MAX_TEXT_CHARS;
-
+export default function HomePage() {
   return (
-    <main className="main-container">
-      {/* Context-aware Page Guide Banner */}
-      <PageGuideBanner
-        pageKey="workbench"
-        title="Clinical Workbench"
-        description="Select a synthetic case preset or ingest documents (Plain Text, Digital PDF, Image Scan) to perform deterministic evidence verification and review synthesis."
-        onOpenGuide={handleOpenGuide}
-      />
+    <main className="landing-page">
+      {/* =========================================================================
+          HERO SECTION (Centered Layout, High Contrast, Neo-Brutalist Geometry)
+          ========================================================================= */}
+      <section className="hero-centered">
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "20px", flexWrap: "wrap", justifyContent: "center" }}>
+          <span className="badge-neo badge-neo-scope2" style={{ fontSize: "0.8rem", padding: "6px 14px" }}>
+            ✦ CLINICAL INTELLIGENCE PLATFORM
+          </span>
+          <span className="badge-neo badge-neo-status" style={{ fontSize: "0.8rem", padding: "6px 14px" }}>
+            <span className="status-live-dot" /> SYNTHETIC DATA BENCHMARK
+          </span>
+        </div>
 
-      {/* Error Alert Box */}
-      {apiError && (
-        <div className="error-box-neo" role="alert">
-          <div className="error-header">
-            <span>Analysis Verification Error</span>
-            <span className="badge-neo badge-neo-high">{apiError.code}</span>
+        <h1 className="hero-title">
+          Audit-Ready AI Clinical Review Grounded in{" "}
+          <span className="hero-highlight">Verifiable Evidence.</span>
+        </h1>
+
+        <p className="hero-subtitle">
+          Sanitas automates clinical document intake with schema-enforced entity extraction,
+          mathematical evidence substring verification against immutable source lines,
+          and deterministic contradiction detection.
+        </p>
+
+        {/* Primary Call-to-Actions */}
+        <div className="hero-cta-group">
+          <Link href="/workbench" className="btn-neo btn-neo-primary hero-btn-main">
+            Launch Clinical Workbench &rarr;
+          </Link>
+          <Link href="/docs" className="btn-neo btn-neo-secondary hero-btn-sub">
+            📖 System Architecture &amp; Docs
+          </Link>
+          <Link href="/history" className="btn-neo btn-neo-secondary hero-btn-sub">
+            📋 Audit History
+          </Link>
+        </div>
+
+        {/* 4 Architectural Proof Badges */}
+        <div className="hero-stats-row">
+          <div className="hero-stat-card">
+            <div className="hero-stat-val">100%</div>
+            <div className="hero-stat-label">Evidence Grounding</div>
+            <p className="hero-stat-sub">Every clinical claim verified via deterministic quote matching</p>
           </div>
-          <p className="error-msg">{apiError.message}</p>
-          {apiError.suggestion && (
-            <p className="error-suggestion">
-              <strong>Actionable Suggestion:</strong> {apiError.suggestion}
+          <div className="hero-stat-card">
+            <div className="hero-stat-val">2-Pass</div>
+            <div className="hero-stat-label">Isolated AI Pipeline</div>
+            <p className="hero-stat-sub">Pass 1 factual extraction separated from Pass 2 review synthesis</p>
+          </div>
+          <div className="hero-stat-card">
+            <div className="hero-stat-val">3 Modes</div>
+            <div className="hero-stat-label">Multi-Modal Intake</div>
+            <p className="hero-stat-sub">Plain text, digital PDF (PyMuPDF), and memory-bounded OCR</p>
+          </div>
+          <div className="hero-stat-card">
+            <div className="hero-stat-val">Fail-Closed</div>
+            <div className="hero-stat-label">Deterministic Gate</div>
+            <p className="hero-stat-sub">Ungrounded hallucinations trigger HTTP 502 rejection</p>
+          </div>
+        </div>
+      </section>
+
+      {/* =========================================================================
+          PIPELINE WALKTHROUGH: 3-STEP AUDITABLE WORKFLOW
+          ========================================================================= */}
+      <section className="section-container" style={{ paddingTop: "20px" }}>
+        <div style={{ textAlign: "center", marginBottom: "36px" }}>
+          <span className="badge-neo badge-neo-scope1">Transparent Engineering</span>
+          <h2 style={{ fontSize: "2.1rem", marginTop: "8px", marginBottom: "8px" }}>
+            How Sanitas Verifies Clinical Records
+          </h2>
+          <p style={{ color: "var(--text-muted)", maxWidth: "680px", margin: "0 auto", fontSize: "0.95rem" }}>
+            Unlike black-box LLM wrappers, Sanitas enforces strict mathematical verification between the original document text and all generated review findings.
+          </p>
+        </div>
+
+        <div className="workflow-grid">
+          {/* Step 1 */}
+          <div className="card-neo workflow-card">
+            <div className="workflow-step-badge">STAGE 1</div>
+            <div className="workflow-icon">📥</div>
+            <h3 className="workflow-card-title">Multi-Modal Intake &amp; Canonicalization</h3>
+            <p className="workflow-card-desc">
+              Ingests raw text, native digital PDFs, or scanned images. Text is segmented line-by-line into an immutable <code>CanonicalDocument</code> with permanent identifiers (<code>p1-s1</code>, <code>p1-s2</code>).
             </p>
-          )}
-          <div className="error-id">Tracking Correlation ID: {apiError.correlation_id}</div>
-        </div>
-      )}
-
-      {networkError && (
-        <div className="error-box-neo" role="alert">
-          <div className="error-header">
-            <span>Backend Connectivity Notice</span>
-          </div>
-          <p className="error-msg">{networkError}</p>
-        </div>
-      )}
-
-      {/* Main Workbench Grid */}
-      <div className="workbench-grid">
-        {/* LEFT COLUMN: Document Input or Source Inspection */}
-        <section className="card-neo" aria-label="Input Clinical Document and Canonical Source">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
-            <div>
-              <span className="badge-neo badge-neo-scope2">
-                {analysis ? "Source Document" : "Multi-Modal Ingestion"}
-              </span>
-              <h2 style={{ fontSize: "1.3rem", marginTop: "6px" }}>
-                {analysis ? "Canonical Segments" : "Clinical Document Intake"}
-              </h2>
+            <div className="workflow-card-footer">
+              <span className="tag-micro">PyMuPDF Text Density Check</span>
+              <span className="tag-micro">150 DPI Memory Bounding</span>
             </div>
-            {analysis && (
-              <button
-                type="button"
-                className="btn-neo btn-neo-sm btn-neo-secondary"
-                onClick={() => setAnalysis(null)}
-              >
-                + New Document Review
-              </button>
-            )}
           </div>
 
-          {!analysis ? (
+          {/* Step 2 */}
+          <div className="card-neo workflow-card">
+            <div className="workflow-step-badge">STAGE 2</div>
+            <div className="workflow-icon">🛡️</div>
+            <h3 className="workflow-card-title">Two-Pass AI &amp; Evidence Gate</h3>
+            <p className="workflow-card-desc">
+              Gemini extracts clinical entities with verbatim quote references. An independent Python gate verifies quotes against source text. Deterministic rules flag allergy and medication conflicts.
+            </p>
+            <div className="workflow-card-footer">
+              <span className="tag-micro">Prompt E1.1 Fact Extraction</span>
+              <span className="tag-micro">Fail-Closed Verification Gate</span>
+            </div>
+          </div>
+
+          {/* Step 3 */}
+          <div className="card-neo workflow-card">
+            <div className="workflow-step-badge">STAGE 3</div>
+            <div className="workflow-icon">📊</div>
+            <h3 className="workflow-card-title">Evidence-Linked Audit &amp; Persistence</h3>
+            <p className="workflow-card-desc">
+              Synthesizes an executive clinical review report. Every clinical concern, allergy, and medication links directly to its source segment. Full records and telemetry persist to Neon PostgreSQL.
+            </p>
+            <div className="workflow-card-footer">
+              <span className="tag-micro">Interactive Quote Drawer</span>
+              <span className="tag-micro">Neon PostgreSQL Audit Log</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* =========================================================================
+          BENCHMARK CASES: INTERACTIVE PRESET SHOWCASE
+          ========================================================================= */}
+      <section className="section-container" style={{ background: "#FFFFFF", borderTop: "var(--ui-border)", borderBottom: "var(--ui-border)", padding: "64px 24px" }}>
+        <div style={{ maxWidth: "1280px", margin: "0 auto" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "32px", flexWrap: "wrap", gap: "16px" }}>
             <div>
-              {/* Synthetic Presets Selector */}
-              <div style={{ marginBottom: "14px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                  <span style={{ fontSize: "0.8rem", fontWeight: 800, color: "var(--primary-dark)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                    Synthetic Clinical Encounters:
-                  </span>
-                  <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
-                    Click to load benchmark test cases
-                  </span>
+              <span className="badge-neo badge-neo-scope2">Preloaded Test Encounters</span>
+              <h2 style={{ fontSize: "2.1rem", marginTop: "8px", marginBottom: "6px" }}>
+                Explore Synthetic Benchmark Cases
+              </h2>
+              <p style={{ color: "var(--text-muted)", fontSize: "0.92rem", margin: 0 }}>
+                Test Sanitas immediately with verified synthetic scenarios designed to validate contradiction detection and factual extraction.
+              </p>
+            </div>
+            <Link href="/workbench" className="btn-neo btn-neo-primary">
+              Open Workbench With Presets &rarr;
+            </Link>
+          </div>
+
+          <div className="presets-showcase-grid">
+            {BENCHMARK_CASES.map((bc) => (
+              <div key={bc.id} className="card-neo preset-showcase-card">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                  <span className={`badge-neo ${bc.badgeType}`}>{bc.badge}</span>
+                  <span style={{ fontSize: "0.75rem", fontFamily: "monospace", color: "var(--text-muted)" }}>SYNTHETIC</span>
                 </div>
-                <div className="sample-presets-bar">
-                  {DEMO_PRESETS.map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      className={`sample-preset-btn ${activePreset === p.id ? "active" : ""}`}
-                      onClick={() => handleSelectPreset(p)}
-                      title={p.description}
-                    >
-                      {p.label}
-                    </button>
+                <h3 style={{ fontSize: "1.25rem", color: "var(--primary-dark)", marginBottom: "8px" }}>{bc.title}</h3>
+                <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", lineHeight: 1.5, marginBottom: "16px" }}>
+                  {bc.scenario}
+                </p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "18px" }}>
+                  {bc.highlights.map((h, i) => (
+                    <span key={i} className="tag-micro" style={{ background: "var(--mint-light)", border: "1px solid var(--border-color)" }}>
+                      {h}
+                    </span>
                   ))}
                 </div>
-              </div>
-
-              <form onSubmit={handleSubmit}>
-                {/* Input Mode Selector Tabs */}
-                <div className="tab-bar-neo" role="tablist">
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={inputMode === "text"}
-                    className={`tab-btn-neo ${inputMode === "text" ? "active" : ""}`}
-                    onClick={() => {
-                      setInputMode("text");
-                      setApiError(null);
-                    }}
-                  >
-                    Plain Text Note
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={inputMode === "pdf"}
-                    className={`tab-btn-neo ${inputMode === "pdf" ? "active" : ""}`}
-                    onClick={() => {
-                      setInputMode("pdf");
-                      setApiError(null);
-                    }}
-                  >
-                    Digital PDF Document
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={inputMode === "image"}
-                    className={`tab-btn-neo ${inputMode === "image" ? "active" : ""}`}
-                    onClick={() => {
-                      setInputMode("image");
-                      setApiError(null);
-                    }}
-                  >
-                    Document Scan / Photo
-                  </button>
-                </div>
-
-                {/* TAB 1: PLAIN TEXT */}
-                {inputMode === "text" && (
-                  <div style={{ marginBottom: "16px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                      <label htmlFor="clinical-note-input" style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--primary-dark)" }}>
-                        Synthetic Clinical Text
-                      </label>
-                      <span
-                        style={{
-                          fontSize: "0.78rem",
-                          fontWeight: 700,
-                          color: isOverLimit ? "var(--alert-red)" : "var(--text-muted)",
-                        }}
-                      >
-                        {charCount.toLocaleString()} / {MAX_TEXT_CHARS.toLocaleString()} characters
-                      </span>
-                    </div>
-                    <textarea
-                      id="clinical-note-input"
-                      className="textarea-neo"
-                      value={noteText}
-                      onChange={(e) => {
-                        setNoteText(e.target.value);
-                        setActivePreset("");
-                      }}
-                      placeholder="Paste synthetic clinical document text here (demographics, symptoms, diagnoses, medications, vitals, allergies)..."
-                      rows={14}
-                      disabled={isLoading}
-                      required
-                    />
-                  </div>
-                )}
-
-                {/* TAB 2: DIGITAL PDF */}
-                {inputMode === "pdf" && (
-                  <div style={{ marginBottom: "16px" }}>
-                    <div
-                      className="dropzone-neo"
-                      onClick={() => fileInputRef.current?.click()}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        const file = e.dataTransfer.files?.[0];
-                        if (file && file.type === "application/pdf") {
-                          setSelectedFile(file);
-                          setActivePreset("");
-                          setApiError(null);
-                        }
-                      }}
-                    >
-                      <div className="dropzone-icon">📄</div>
-                      <div className="dropzone-title">
-                        {selectedFile ? selectedFile.name : "Click to select or drag & drop a PDF document"}
-                      </div>
-                      <div className="dropzone-sub">
-                        Supports digital &amp; scanned PDF clinical records (max 10 MB, up to 15 pages)
-                      </div>
-                      {selectedFile && (
-                        <div style={{ marginTop: "12px" }}>
-                          <span className="badge-neo badge-neo-scope1">
-                            {(selectedFile.size / 1024).toFixed(1)} KB
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="application/pdf"
-                      style={{ display: "none" }}
-                      onChange={handleFileChange}
-                    />
-                  </div>
-                )}
-
-                {/* TAB 3: IMAGE SCAN */}
-                {inputMode === "image" && (
-                  <div style={{ marginBottom: "16px" }}>
-                    <div
-                      className="dropzone-neo"
-                      onClick={() => fileInputRef.current?.click()}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        const file = e.dataTransfer.files?.[0];
-                        if (file && file.type.startsWith("image/")) {
-                          setSelectedFile(file);
-                          setActivePreset("");
-                          setApiError(null);
-                          const reader = new FileReader();
-                          reader.onload = () => setImagePreview(reader.result as string);
-                          reader.readAsDataURL(file);
-                        }
-                      }}
-                    >
-                      <div className="dropzone-icon">📷</div>
-                      <div className="dropzone-title">
-                        {selectedFile ? selectedFile.name : "Click to select or drop a document image scan"}
-                      </div>
-                      <div className="dropzone-sub">
-                        Supports JPEG / PNG document scans &amp; photographs (max 10 MB)
-                      </div>
-                      {selectedFile && (
-                        <div style={{ marginTop: "12px" }}>
-                          <span className="badge-neo badge-neo-scope1">
-                            {(selectedFile.size / 1024).toFixed(1)} KB
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                    {imagePreview && (
-                      <div style={{ marginBottom: "16px", textAlign: "center" }}>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={imagePreview}
-                          alt="Document Preview"
-                          style={{
-                            maxWidth: "100%",
-                            maxHeight: "220px",
-                            border: "var(--ui-border)",
-                            borderRadius: "8px",
-                            boxShadow: "2px 2px 0 var(--border-color)",
-                          }}
-                        />
-                      </div>
-                    )}
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/png, image/jpeg"
-                      style={{ display: "none" }}
-                      onChange={handleFileChange}
-                    />
-                  </div>
-                )}
-
-                {/* Action Buttons */}
-                <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
-                  <button
-                    type="button"
-                    className="btn-neo btn-neo-secondary"
-                    onClick={handleClear}
-                    disabled={isLoading}
-                  >
-                    Clear Form
-                  </button>
-                  <button
-                    type="submit"
-                    className="btn-neo btn-neo-primary"
-                    disabled={isLoading || isOverLimit || (inputMode === "text" ? !noteText.trim() : !selectedFile)}
-                  >
-                    {isLoading ? "Running Review Pipeline..." : "Run Evidence-Linked Review \u2192"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          ) : (
-            /* CANONICAL SOURCE SEGMENTS DRAWER */
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-                <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", margin: 0 }}>
-                  Showing {analysis.canonical_document.segments?.length || 0} immutable source segments. Click on evidence pills in findings to highlight matching lines.
-                </p>
-                {highlightedSegment && (
-                  <button
-                    type="button"
-                    className="btn-neo btn-neo-xs btn-neo-secondary"
-                    onClick={() => setHighlightedSegment(null)}
-                  >
-                    Clear Highlight
-                  </button>
-                )}
-              </div>
-
-              <div className="segments-list">
-                {analysis.canonical_document.segments?.map((seg) => {
-                  const isHighlighted = highlightedSegment === seg.segment_id;
-                  return (
-                    <div
-                      key={seg.segment_id}
-                      id={`segment-${seg.segment_id}`}
-                      className={`segment-box ${isHighlighted ? "active-evidence" : ""}`}
-                    >
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                        <span className="segment-id-tag">
-                          {seg.segment_id} {isHighlighted && "★ EVIDENCE MATCH"}
-                        </span>
-                        <button
-                          type="button"
-                          className="btn-neo btn-neo-xs btn-neo-secondary"
-                          style={{ fontSize: "0.68rem", padding: "2px 6px" }}
-                          onClick={() => handleCopySegment(seg.text, seg.segment_id)}
-                        >
-                          {copiedSegmentId === seg.segment_id ? "✓ Copied" : "Copy"}
-                        </button>
-                      </div>
-                      <div>{seg.text}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </section>
-
-        {/* RIGHT COLUMN: Review Results, Progress, or Clinical Guidance */}
-        <section aria-label="Clinical Findings and Grounded Evidence">
-          {isLoading && (
-            <div className="pipeline-progress-tracker">
-              <div className="spinner-neo" aria-hidden="true" />
-              <h3 style={{ textAlign: "center", margin: "0 0 6px", color: "var(--primary-dark)" }}>
-                Executing 7-Stage Clinical Review Pipeline
-              </h3>
-              <p style={{ textAlign: "center", fontSize: "0.85rem", color: "var(--text-muted)", margin: 0 }}>
-                Synthesizing findings through Gemini and deterministically verifying source evidence quotes against canonical segments.
-              </p>
-
-              <div className="tracker-stages-list">
-                <div className="tracker-stage-item active">
-                  <span className="tracker-badge-num">P1-2</span>
-                  <div style={{ fontSize: "0.8rem", fontWeight: 700 }}>Canonical Intake</div>
-                </div>
-                <div className="tracker-stage-item active">
-                  <span className="tracker-badge-num">P3</span>
-                  <div style={{ fontSize: "0.8rem", fontWeight: 700 }}>Fact Extraction</div>
-                </div>
-                <div className="tracker-stage-item active">
-                  <span className="tracker-badge-num">P4-5</span>
-                  <div style={{ fontSize: "0.8rem", fontWeight: 700 }}>Evidence Gate</div>
-                </div>
-                <div className="tracker-stage-item active">
-                  <span className="tracker-badge-num">P6-7</span>
-                  <div style={{ fontSize: "0.8rem", fontWeight: 700 }}>Review Synthesis</div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {!isLoading && !analysis && (
-            <div className="card-neo empty-state-box">
-              <div className="empty-state-icon">🛡️</div>
-              <h3 className="empty-state-title">Awaiting Clinical Document Submission</h3>
-              <p className="empty-state-text">
-                Submit a synthetic clinical note, digital PDF, or scanned document using the intake panel on the left. The Sanitas pipeline will extract structured entities, verify evidence quotes, check factual contradictions, and persist results to PostgreSQL.
-              </p>
-              <div style={{ display: "flex", gap: "10px", justifyContent: "center", marginTop: "16px" }}>
-                <button
-                  type="button"
-                  className="btn-neo btn-neo-sm btn-neo-primary"
-                  onClick={() => handleSelectPreset(DEMO_PRESETS[0])}
-                >
-                  Load Elena Rostova Sample
-                </button>
-                <button
-                  type="button"
+                <Link
+                  href="/workbench"
                   className="btn-neo btn-neo-sm btn-neo-secondary"
-                  onClick={() => handleOpenGuide("workbench")}
+                  style={{ width: "100%", justifyContent: "center", fontWeight: 700 }}
                 >
-                  📖 View Workbench Guide
-                </button>
+                  Analyze Case in Workbench &rarr;
+                </Link>
               </div>
-            </div>
-          )}
+            ))}
+          </div>
+        </div>
+      </section>
 
-          {!isLoading && analysis && (
-            <ReviewReportView
-              analysis={analysis}
-              onSelectSegment={(segId) => {
-                setHighlightedSegment(segId);
-                const el = document.getElementById(`segment-${segId}`);
-                if (el) {
-                  el.scrollIntoView({ behavior: "smooth", block: "center" });
-                }
-              }}
-            />
-          )}
-        </section>
-      </div>
+      {/* =========================================================================
+          CORE CAPABILITIES GRID (4 Architectural Pillars)
+          ========================================================================= */}
+      <section className="section-container" style={{ padding: "64px 24px" }}>
+        <div style={{ textAlign: "center", marginBottom: "40px" }}>
+          <span className="badge-neo badge-neo-scope1">Engineering Safeguards</span>
+          <h2 style={{ fontSize: "2.1rem", marginTop: "8px", marginBottom: "8px" }}>
+            Architectural Guarantees Built for Clinical Rigor
+          </h2>
+          <p style={{ color: "var(--text-muted)", maxWidth: "700px", margin: "0 auto", fontSize: "0.95rem" }}>
+            Built in alignment with the Agentic Web Development Handbook standards for anti-vibe-coding, deterministic verification, and explicit database failure semantics.
+          </p>
+        </div>
+
+        <div className="features-grid">
+          <div className="card-neo feature-card">
+            <div className="feature-icon-box">🛡️</div>
+            <h3 className="feature-title">Deterministic Verification Gate</h3>
+            <p className="feature-desc">
+              Every clinical entity is bound to verbatim quotes from canonical segments. Python application code independently tests substring containment prior to review synthesis. If a quote is fabricated or absent, the pipeline fails closed with HTTP 502.
+            </p>
+          </div>
+
+          <div className="card-neo feature-card">
+            <div className="feature-icon-box">🔍</div>
+            <h3 className="feature-title">Document Contradiction Engine</h3>
+            <p className="feature-desc">
+              A rule-based inconsistency detector identifies conflicting statements within the document without LLM hallucination: NKDA status vs documented penicillin allergy, active vs discontinued drug statuses, and conflicting vital timestamps.
+            </p>
+          </div>
+
+          <div className="card-neo feature-card">
+            <div className="feature-icon-box">⚡</div>
+            <h3 className="feature-title">Multi-Modal Adaptive Router</h3>
+            <p className="feature-desc">
+              Intelligently inspects incoming documents. Digital PDFs with &ge;80% selectable text parse directly via PyMuPDF in milliseconds. Scanned records route to memory-bounded 150 DPI optical transcription, preventing OOM crashes on cloud tiers.
+            </p>
+          </div>
+
+          <div className="card-neo feature-card">
+            <div className="feature-icon-box">💾</div>
+            <h3 className="feature-title">Neon PostgreSQL &amp; Dialect Portability</h3>
+            <p className="feature-desc">
+              In production and standard development, PostgreSQL persistence is strictly required with typed failure if unavailable. Automated unit tests run instantly on in-memory SQLite fixtures through portable SQLAlchemy dialect modeling.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* =========================================================================
+          BOTTOM CALL TO ACTION & SYSTEM TRUST BANNER
+          ========================================================================= */}
+      <section style={{ background: "var(--primary-dark)", color: "#FFFFFF", padding: "64px 24px", textAlign: "center" }}>
+        <div style={{ maxWidth: "800px", margin: "0 auto" }}>
+          <span className="badge-neo badge-neo-scope2" style={{ background: "var(--sage-accent)", color: "var(--primary-dark)", marginBottom: "16px", display: "inline-block" }}>
+            Ready for Clinical Review
+          </span>
+          <h2 style={{ color: "#FFFFFF", fontSize: "2.4rem", marginBottom: "14px" }}>
+            Experience Evidence-Grounded AI Analysis
+          </h2>
+          <p style={{ color: "#D1E7DD", fontSize: "1.05rem", lineHeight: 1.6, marginBottom: "32px" }}>
+            Explore the live clinical reviewer on synthetic encounters, inspect interactive quote highlights, or examine the exhaustive architectural specifications and flowcharts.
+          </p>
+          <div style={{ display: "flex", gap: "16px", justifyContent: "center", flexWrap: "wrap" }}>
+            <Link href="/workbench" className="btn-neo btn-neo-primary" style={{ padding: "14px 28px", fontSize: "1rem" }}>
+              Open Clinical Workbench &rarr;
+            </Link>
+            <Link href="/docs" className="btn-neo btn-neo-secondary" style={{ padding: "14px 28px", fontSize: "1rem" }}>
+              📖 Read Documentation &amp; Schemas
+            </Link>
+          </div>
+        </div>
+      </section>
     </main>
   );
 }

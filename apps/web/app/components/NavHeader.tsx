@@ -72,6 +72,12 @@ export default function NavHeader() {
               href="/"
               className={`nav-link ${isCurrent("/") ? "active" : ""}`}
             >
+              Home
+            </Link>
+            <Link
+              href="/workbench"
+              className={`nav-link ${isCurrent("/workbench") ? "active" : ""}`}
+            >
               Workbench
             </Link>
             <Link
@@ -93,10 +99,10 @@ export default function NavHeader() {
               type="button"
               className="btn-neo btn-neo-xs btn-neo-secondary"
               onClick={() => openGuide("overview")}
-              title="Open Sanitas Operational User Manual"
+              title="Open Sanitas Quick Operational Guide"
               style={{ fontWeight: 800 }}
             >
-              📖 User Guide
+              📖 Quick Guide
             </button>
             <span className="badge-neo badge-neo-status">
               <span className="status-live-dot" /> Synthetic Mode
