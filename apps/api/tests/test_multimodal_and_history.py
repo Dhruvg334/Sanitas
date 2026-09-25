@@ -251,3 +251,24 @@ def test_evaluation_runner_mock():
     from eval.runner import run_mock_structural_evaluation
     assert run_mock_structural_evaluation() is True
 
+
+def test_alembic_migration_lifecycle():
+    import os
+    import tempfile
+    from alembic.config import Config
+    from alembic import command
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+        db_path = f.name
+
+    try:
+        cfg = Config("alembic.ini")
+        cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
+        command.upgrade(cfg, "head")
+        command.downgrade(cfg, "base")
+        command.upgrade(cfg, "head")
+    finally:
+        if os.path.exists(db_path):
+            os.remove(db_path)
+
+

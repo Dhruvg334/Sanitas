@@ -354,7 +354,7 @@ export default function DocsPage() {
               <div style={{ background: "#FFFFFF", border: "var(--ui-border)", borderRadius: "8px", padding: "16px" }}>
                 <h4 style={{ color: "var(--primary-dark)" }}>Stage P6: Review Synthesis (Pass 2 - Prompt R1.0)</h4>
                 <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "4px" }}>
-                  Synthesizes an executive clinical review report (<code>ClinicalReview</code>) summarizing verified facts, contextualizing clinical concerns, highlighting potential inconsistencies from Stage P5, and surfacing actionable information gaps.
+                  Synthesizes an executive clinical review report (<code>ClinicalReview</code>) summarizing verified facts, contextualizing clinical concerns, highlighting potential inconsistencies from Stage P5, and surfacing review-relevant information gaps.
                 </p>
               </div>
 
@@ -459,7 +459,7 @@ export default function DocsPage() {
                 <ul style={{ fontSize: "0.82rem", color: "var(--text-dark)", paddingLeft: "18px", lineHeight: 1.6 }}>
                   <li>Produces concise executive summary (max 1200 chars).</li>
                   <li>Contextualizes clinical concerns directly grounded in Pass 1 facts.</li>
-                  <li>Surfaces actionable missing information (missing dosages, missing lab reference ranges).</li>
+                  <li>Surfaces materially missing documentation (missing dosages, missing lab reference ranges).</li>
                   <li>Prohibited from issuing prescriptive medical directives (e.g. <em>&ldquo;I prescribe&rdquo;</em>).</li>
                 </ul>
               </div>

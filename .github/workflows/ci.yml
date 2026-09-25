@@ -42,3 +42,5 @@ jobs:
       - run: pytest
       - name: Application import and startup
         run: python -m app.smoke
+      - name: Evaluation runner (mock structural validation)
+        run: python -m eval.runner --mock

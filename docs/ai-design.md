@@ -9,7 +9,7 @@ Sanitas implements a deterministic, evidence-grounded AI architecture built on G
 1. **Evidence Precedes Assertion:** Every clinical entity extracted from a document must reference at least one canonical source segment (`p{page}-s{seq}`) and contain a verbatim quote verifiable in the original text.
 2. **Two-Pass Separation of Concerns:**
    - **Pass 1 (Extraction - Prompt E1.1):** Extracts documented facts (demographics, symptoms, diagnoses, medications, vitals, allergies, observations) without synthesizing opinions, risks, or clinical recommendations.
-   - **Pass 2 (Synthesis - Prompt R1.0):** Reviews documented entities and identified contradictions to synthesize an executive clinical summary, clinical concerns, and actionable information gaps.
+   - **Pass 2 (Synthesis - Prompt R1.0):** Reviews documented entities and identified contradictions to synthesize an executive clinical summary, clinical concerns, and review-relevant information gaps.
 3. **Deterministic Gate Over LLM Trust:** Model structured JSON is never accepted solely on schema validity. Application code deterministically verifies evidence quotes, segment IDs, entity relationships, and absence of prescriptive directives before returning results to the client.
 4. **Explicit Uncertainty & Negation:** Negative statements ("No fever", "Denies shortness of breath", "No known allergies") are preserved as negative status values and never converted into positive findings. Ambiguities are flagged as uncertain with candidate values.
 5. **Prompt Injection Boundary:** User-submitted documents are strictly demarcated as untrusted data using explicit delimiters (`DATA_START` / `DATA_END`). Adversarial directives embedded in documents are parsed solely as content.

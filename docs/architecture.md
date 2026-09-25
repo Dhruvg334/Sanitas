@@ -78,7 +78,7 @@ The backend is built with **FastAPI** on **Python 3.12**, deployed as a persiste
    - Flags conflicting vitals timestamps.
 6. **Stage P6: Review Synthesis (Pass 2 - Prompt R1.0, `gemini.py`)**:
    - Synthesizes an executive clinical review report (`ClinicalReview`) summarizing documented findings.
-   - Contextualizes clinical concerns, candidate inconsistencies, and actionable information gaps.
+   - Contextualizes clinical concerns, candidate inconsistencies, and review-relevant information gaps.
    - Constrained to descriptive clinical documentation; prohibited from issuing medical directives.
 7. **Stage P7: Review Quality Gate (`quality_gate.py`)**:
    - Validates that all entity IDs referenced in review findings exist in Pass 1 extraction output.

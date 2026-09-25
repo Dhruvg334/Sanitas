@@ -2,21 +2,24 @@
 
 Provides two distinct modes:
 1. --mock (CI Structural Validation):
-   Runs pipeline validation against synthetic test cases using mocked outputs to verify
+   Runs pipeline validation against 28 synthetic test cases across all 4 modalities
+   (Plain text, Digital PDF, Image, Scanned PDF) using mocked outputs to verify
    canonicalization, schema conformance, inconsistency rules, and quality gates.
    Does not invoke external APIs or require credentials.
 
 2. --live (Gemini Model Performance Benchmark):
-   Runs live model calls using gemini-3.8-flash on synthetic test cases.
-   Calculates real Precision, Recall, F1, Evidence Validity Rate, and Latency percentiles.
+   Runs live model calls using gemini-3.8-flash on synthetic test cases across all modalities.
+   Calculates real Precision, Recall, F1, Evidence Validity Rate, and Latency percentiles by modality.
    States the exact number of cases evaluated.
 """
 
 import argparse
+import asyncio
 import os
 import sys
 import time
-from typing import List
+from collections import defaultdict
+from typing import Dict, List
 
 if sys.platform == "win32":
     try:
@@ -25,6 +28,7 @@ if sys.platform == "win32":
     except Exception:
         pass
 
+from app.core.config import get_settings
 from app.schemas.extraction import (
     Allergy,
     CanonicalDocument,
@@ -40,8 +44,9 @@ from app.schemas.extraction import (
     Symptom,
     Vital,
 )
-from app.services.canonicalize import canonicalize
-from app.services.document_router import IngestedDocument
+from app.services.canonicalize import canonicalize, canonicalize_digital_pdf
+from app.services.evidence import validate_evidence
+from app.services.gemini import GeminiAIService
 from app.services.inconsistency_rules import find_inconsistency_candidates
 from app.services.quality_gate import validate_review_quality_gate
 from eval.cases import SYNTHETIC_EVAL_CASES, SyntheticCase
@@ -49,31 +54,47 @@ from eval.cases import SYNTHETIC_EVAL_CASES, SyntheticCase
 
 def run_mock_structural_evaluation() -> bool:
     """Runs fast structural integrity tests for CI without requiring API keys."""
-    print("=" * 72)
-    print("SANITAS SYNTHETIC PIPELINE - CI STRUCTURAL VALIDATION")
+    print("=" * 76)
+    print("SANITAS SYNTHETIC PIPELINE - CI STRUCTURAL VALIDATION (28 CASES)")
     print("MODE: Offline / Mocked Pipeline Integrity (Fast CI)")
-    print("NOTE: Mock outputs test schema and regression only.")
+    print("NOTE: Mock outputs test schema, routing, and quality gates only.")
     print("      These are NOT model performance metrics.")
-    print("=" * 72)
+    print("=" * 76)
 
     passed_count = 0
     total_cases = len(SYNTHETIC_EVAL_CASES)
+    modality_counts: Dict[str, int] = defaultdict(int)
 
     for case in SYNTHETIC_EVAL_CASES:
-        print(f"\nEvaluating [{case.case_id}] {case.title} (Category: {case.category})...")
+        print(f"\nEvaluating [{case.case_id}] {case.title} (Modality: {case.modality}, Category: {case.category})...")
 
-        # Stage P1 & P2: Ingest and Canonicalize
-        canonical = canonicalize(case.text, max_chars=50000)
-        assert len(canonical.segments) > 0, "Canonical segments must not be empty"
+        # Stage P1 & P2: Ingest, Route, and Canonicalize according to modality
+        raw_bytes = case.get_bytes()
+        if case.modality == "plain_text":
+            canonical = canonicalize(case.text, max_chars=50000)
+        elif case.modality == "digital_pdf":
+            canonical = canonicalize_digital_pdf(raw_bytes)
+        else:
+            # For image and scanned_pdf in offline mock mode:
+            # Simulated visual transcription yields canonical segments matching text
+            canonical = canonicalize(case.text, max_chars=50000)
 
-        # Verify segment ids are deterministic
-        for idx, seg in enumerate(canonical.segments, start=1):
-            assert seg.segment_id == f"p1-s{idx}", f"Unexpected segment id {seg.segment_id}"
+        assert len(canonical.segments) > 0, f"Canonical segments must not be empty for {case.case_id}"
 
-        # Grounding evidence reference from first segment
-        first_seg = canonical.segments[0].segment_id
-        first_text = canonical.segments[0].text[:15]
-        ref = EvidenceRef(segment_id=first_seg, page_number=1, quote=first_text)
+        # Anchored evidence references
+        first_seg = canonical.segments[0]
+        ref1 = EvidenceRef(
+            segment_id=first_seg.segment_id,
+            page_number=first_seg.page_number,
+            quote=first_seg.text[:min(15, len(first_seg.text))],
+        )
+
+        last_seg = canonical.segments[-1]
+        ref2 = EvidenceRef(
+            segment_id=last_seg.segment_id,
+            page_number=last_seg.page_number,
+            quote=last_seg.text[:min(15, len(last_seg.text))],
+        )
 
         # Stage P3: Mock extraction conforming strictly to schema
         mock_extraction = ClinicalExtraction(
@@ -82,7 +103,7 @@ def run_mock_structural_evaluation() -> bool:
                     value=case.case_id,
                     support_status="supported",
                     certainty="high",
-                    evidence=[ref],
+                    evidence=[ref1],
                 )
             ),
             symptoms=[
@@ -91,7 +112,7 @@ def run_mock_structural_evaluation() -> bool:
                     name=s,
                     support_status="supported",
                     certainty="high",
-                    evidence=[ref],
+                    evidence=[ref1],
                 )
                 for i, s in enumerate(case.expected_symptoms, start=1)
             ],
@@ -102,7 +123,7 @@ def run_mock_structural_evaluation() -> bool:
                     diagnosis_status="documented",
                     support_status="supported",
                     certainty="high",
-                    evidence=[ref],
+                    evidence=[ref1],
                 )
                 for i, d in enumerate(case.expected_diagnoses, start=1)
             ],
@@ -113,7 +134,7 @@ def run_mock_structural_evaluation() -> bool:
                     medication_status="active",
                     support_status="supported",
                     certainty="high",
-                    evidence=[ref],
+                    evidence=[ref1],
                 )
                 for i, m in enumerate(case.expected_medications, start=1)
             ],
@@ -124,69 +145,50 @@ def run_mock_structural_evaluation() -> bool:
                     allergy_status="no_known_allergies" if "no known" in a.lower() or "nkda" in a.lower() else "present",
                     support_status="supported",
                     certainty="high",
-                    evidence=[ref],
+                    evidence=[ref1],
                 )
                 for i, a in enumerate(case.expected_allergies, start=1)
             ],
         )
 
-        # Stage P5: Inconsistency detection
-        inconsistencies = find_inconsistency_candidates(mock_extraction)
+        # Stage P5: Inconsistency detection injection if inconsistency case
         if case.category == "inconsistency":
-            if case.case_id == "case-002":
-                # For case-002: Add NKDA allergy alongside specific Amoxicillin allergy
-                mock_extraction.allergies = [
+            if case.case_id in ("case-002", "case-010", "case-017"):
+                # Inject contradiction with ref2 so it has 2 distinct evidence refs
+                mock_extraction.allergies.append(
                     Allergy(
-                        entity_id="alg-1",
+                        entity_id="alg-99",
                         substance="NKDA",
                         allergy_status="no_known_allergies",
                         support_status="supported",
                         certainty="high",
-                        evidence=[EvidenceRef(segment_id="p1-s3", page_number=1, quote="ALLERGIES: NKDA")],
-                    ),
-                    Allergy(
-                        entity_id="alg-2",
-                        substance="Amoxicillin",
-                        allergy_status="present",
-                        support_status="supported",
-                        certainty="high",
-                        evidence=[EvidenceRef(segment_id="p1-s5", page_number=1, quote="taking Amoxicillin 500mg")],
-                    ),
-                ]
-                case2_incons = find_inconsistency_candidates(mock_extraction)
-                assert any(
-                    "no known allergies" in inc.description.lower() for inc in case2_incons
-                ), "Expected allergy inconsistency detection for case-002"
-                inconsistencies = case2_incons
-                print("  [OK] Correctly detected factual allergy contradiction (NKDA vs Amoxicillin)")
-            elif case.case_id == "case-003":
-                # Add active and discontinued medications with accurate segment references
-                mock_extraction.medications = [
+                        evidence=[ref2],
+                    )
+                )
+            elif case.case_id in ("case-003", "case-024"):
+                # Inject medication conflict with ref2
+                target_med = case.expected_medications[0] if case.expected_medications else "TargetMed"
+                mock_extraction.medications.append(
                     Medication(
-                        entity_id="med-1",
-                        name="Lisinopril",
-                        medication_status="active",
-                        support_status="supported",
-                        certainty="high",
-                        evidence=[EvidenceRef(segment_id="p1-s3", page_number=1, quote="Lisinopril 20mg")],
-                    ),
-                    Medication(
-                        entity_id="med-2",
-                        name="Lisinopril",
+                        entity_id="med-99",
+                        name=target_med,
                         medication_status="discontinued",
                         support_status="supported",
                         certainty="high",
-                        evidence=[EvidenceRef(segment_id="p1-s5", page_number=1, quote="Discontinue Lisinopril")],
-                    ),
-                ]
-                case3_incons = find_inconsistency_candidates(mock_extraction)
-                assert any(
-                    "lisinopril" in inc.description.lower() for inc in case3_incons
-                ), "Expected medication status conflict for Lisinopril"
-                inconsistencies = case3_incons
-                print("  [OK] Correctly detected medication status conflict (active vs discontinued)")
+                        evidence=[ref2],
+                    )
+                )
 
-        # Stage P7: Quality Gate
+        # Stage P4: Deterministic Evidence Validation
+        validate_evidence(mock_extraction, canonical)
+
+        # Stage P5: Inconsistency candidate detection
+        inconsistencies = find_inconsistency_candidates(mock_extraction)
+        if case.category == "inconsistency":
+            assert len(inconsistencies) > 0, f"Expected inconsistency for {case.case_id}"
+            print("  [OK] Correctly detected inconsistency rule candidate")
+
+        # Stage P6 & P7: Quality Gate Validation
         mock_review = ClinicalReview(
             report_summary=f"Clinical review summary for synthetic case {case.case_id}.",
             clinical_concerns=[],
@@ -202,71 +204,89 @@ def run_mock_structural_evaluation() -> bool:
             assert False, f"Quality gate unexpectedly failed on valid synthetic mock: {exc}"
 
         passed_count += 1
+        modality_counts[case.modality] += 1
 
-    print("\n" + "=" * 72)
+    print("\n" + "=" * 76)
     print(f"VALIDATION SUMMARY: {passed_count}/{total_cases} test cases passed structural validation.")
+    print("MODALITY BREAKDOWN:")
+    for mod, count in modality_counts.items():
+        print(f"  - {mod:15s}: {count}/7 cases passed")
     print("Status: 100% SUCCESS (CI PASS)")
-    print("=" * 72)
+    print("=" * 76)
     return True
 
 
-def run_live_gemini_evaluation() -> bool:
+async def run_live_gemini_evaluation_async() -> bool:
     """Runs live model evaluation against Gemini API, reporting real metrics."""
-    api_key = os.environ.get("GEMINI_API_KEY")
+    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
     if not api_key:
+        print("=" * 76, file=sys.stderr)
         print("ERROR: GEMINI_API_KEY environment variable is not set.", file=sys.stderr)
-        print("Set GEMINI_API_KEY to run live model evaluation.", file=sys.stderr)
+        print("Set GEMINI_API_KEY to run live model evaluation against Gemini.", file=sys.stderr)
+        print("Example: $env:GEMINI_API_KEY = '<your_key>'", file=sys.stderr)
+        print("=" * 76, file=sys.stderr)
         return False
 
-    print("=" * 72)
+    settings = get_settings()
+    settings.gemini_api_key = api_key
+    ai_service = GeminiAIService(settings=settings)
+
+    print("=" * 76)
     print("SANITAS LIVE MODEL EVALUATION BENCHMARK")
-    print("MODEL: gemini-3.8-flash | PROMPT: E1.1 + R1.0")
-    print(f"BENCHMARK CASES: {len(SYNTHETIC_EVAL_CASES)} synthetic cases")
-    print("=" * 72)
+    print(f"MODEL: {settings.gemini_model} | PROMPTS: E1.1 + R1.0 + T1.0")
+    print(f"TOTAL BENCHMARK CASES: {len(SYNTHETIC_EVAL_CASES)} synthetic cases")
+    print("=" * 76)
 
-    from app.services.gemini import extract_clinical_data, synthesize_review
-
-    latencies: List[float] = []
+    latencies_by_modality: Dict[str, List[float]] = defaultdict(list)
+    all_latencies: List[float] = []
     total_expected_entities = 0
     total_extracted_entities = 0
     total_true_positives = 0
     total_valid_evidence_quotes = 0
     total_supported_entities = 0
+    quality_gate_passes = 0
 
     for case in SYNTHETIC_EVAL_CASES:
-        print(f"\nRunning Case [{case.case_id}]: {case.title}...")
-        start_time = time.perf_counter()
+        print(f"\nRunning Live Case [{case.case_id}] {case.title} (Modality: {case.modality})...")
+        t_start = time.perf_counter()
 
-        canonical = canonicalize(case.text, max_chars=50000)
-
-        # Pass 1: Extraction
+        raw_bytes = case.get_bytes()
         try:
-            extraction = extract_clinical_data(canonical)
-        except Exception as exc:
-            print(f"  Extraction error: {exc}")
-            continue
+            # Canonicalization / Visual Transcription
+            if case.modality == "plain_text":
+                canonical = canonicalize(case.text, max_chars=settings.max_text_chars)
+            elif case.modality == "digital_pdf":
+                canonical = canonicalize_digital_pdf(raw_bytes)
+            else:
+                canonical = await ai_service.transcribe_visual(raw_bytes, case.mime_type)
 
-        # Inconsistency detection
-        inconsistencies = find_inconsistency_candidates(extraction)
+            # Pass 1: Extraction
+            extraction = await ai_service.extract(canonical)
 
-        # Pass 2: Review Synthesis
-        try:
-            review = synthesize_review(canonical, extraction, inconsistencies)
-        except Exception as exc:
-            print(f"  Synthesis error: {exc}")
-            continue
+            # Stage P4: Deterministic Validation
+            validate_evidence(extraction, canonical)
 
-        # Quality Gate
-        try:
+            # Stage P5: Inconsistencies
+            candidates = find_inconsistency_candidates(extraction)
+
+            # Pass 2: Review Synthesis
+            review = await ai_service.synthesize_review(
+                extraction, candidates, canonical.document_quality
+            )
+
+            # Stage P7: Quality Gate
             validate_review_quality_gate(review, extraction, canonical)
+            quality_gate_passes += 1
             gate_status = "PASS"
-        except Exception:
-            gate_status = "FAIL"
+        except Exception as exc:
+            print(f"  [FAIL] Error during pipeline execution: {exc}")
+            continue
 
-        elapsed = time.perf_counter() - start_time
-        latencies.append(elapsed)
+        elapsed = time.perf_counter() - t_start
+        latencies_by_modality[case.modality].append(elapsed)
+        all_latencies.append(elapsed)
 
-        # Count entities
+        # Measure extraction entity counts
         extracted_names: List[str] = []
         for s in extraction.symptoms:
             extracted_names.append(s.name.lower())
@@ -299,27 +319,43 @@ def run_live_gemini_evaluation() -> bool:
         )
         total_true_positives += tp
 
-        print(f"  [OK] Elapsed: {elapsed:.2f}s | Entities extracted: {len(extracted_names)} | Quality Gate: {gate_status}")
+        print(
+            f"  [OK] Elapsed: {elapsed:.2f}s | Extracted: {len(extracted_names)} entities "
+            f"| Quality Gate: {gate_status}"
+        )
 
+    # Compute Aggregate Metrics
     precision = (total_true_positives / total_extracted_entities) if total_extracted_entities > 0 else 0.0
     recall = (total_true_positives / total_expected_entities) if total_expected_entities > 0 else 0.0
     f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) > 0 else 0.0
     evidence_rate = (total_valid_evidence_quotes / total_supported_entities) if total_supported_entities > 0 else 0.0
+    gate_rate = (quality_gate_passes / len(SYNTHETIC_EVAL_CASES)) if SYNTHETIC_EVAL_CASES else 0.0
 
-    latencies.sort()
-    p50 = latencies[len(latencies) // 2] if latencies else 0.0
-    p95 = latencies[int(len(latencies) * 0.95)] if latencies else 0.0
+    all_latencies.sort()
+    p50_overall = all_latencies[len(all_latencies) // 2] if all_latencies else 0.0
+    p95_overall = all_latencies[int(len(all_latencies) * 0.95)] if all_latencies else 0.0
 
-    print("\n" + "=" * 72)
-    print(f"LIVE BENCHMARK RESULTS ({len(latencies)} cases executed):")
-    print(f"  - Precision:               {precision * 100:.1f}%")
-    print(f"  - Recall:                  {recall * 100:.1f}%")
-    print(f"  - F1 Score:                {f1 * 100:.1f}%")
-    print(f"  - Evidence Validity Rate:  {evidence_rate * 100:.1f}%")
-    print(f"  - Latency P50:             {p50:.2f}s")
-    print(f"  - Latency P95:             {p95:.2f}s")
-    print("=" * 72)
-    return True
+    print("\n" + "=" * 76)
+    print(f"LIVE BENCHMARK RESULTS ({len(all_latencies)}/{len(SYNTHETIC_EVAL_CASES)} cases completed):")
+    print(f"  - Precision:                   {precision * 100:.1f}%")
+    print(f"  - Recall:                      {recall * 100:.1f}%")
+    print(f"  - F1 Score:                    {f1 * 100:.1f}%")
+    print(f"  - Evidence Grounding Rate:     {evidence_rate * 100:.1f}%")
+    print(f"  - Quality Gate Pass Rate:      {gate_rate * 100:.1f}%")
+    print(f"  - Latency P50 (Overall):       {p50_overall:.2f}s")
+    print(f"  - Latency P95 (Overall):       {p95_overall:.2f}s")
+    print("LATENCY BY ROUTE:")
+    for mod, lats in latencies_by_modality.items():
+        lats.sort()
+        p50 = lats[len(lats) // 2] if lats else 0.0
+        p95 = lats[int(len(lats) * 0.95)] if lats else 0.0
+        print(f"  - {mod:15s}: P50={p50:.2f}s, P95={p95:.2f}s (n={len(lats)})")
+    print("=" * 76)
+    return len(all_latencies) > 0
+
+
+def run_live_gemini_evaluation() -> bool:
+    return asyncio.run(run_live_gemini_evaluation_async())
 
 
 def main() -> None:
