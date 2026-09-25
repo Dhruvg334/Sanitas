@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
-import Link from "next/link";
+import { useState, useRef, useEffect } from "react";
 import ReviewReportView, { AnalysisResponse } from "../components/ReviewReportView";
 
 interface SafeError {
@@ -134,6 +133,29 @@ export default function WorkbenchPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
+  useEffect(() => {
+    let timer: NodeJS.Timeout | null = null;
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const caseId = params.get("case");
+      if (caseId) {
+        const found = DEMO_PRESETS.find((p) => p.id === caseId);
+        if (found) {
+          timer = setTimeout(() => {
+            setInputMode("text");
+            setActivePreset(found.id);
+            setNoteText(found.text);
+            setSelectedFile(null);
+            setImagePreview(null);
+          }, 0);
+        }
+      }
+    }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, []);
+
   const handleSelectPreset = (preset: DemoPreset) => {
     setInputMode("text");
     setActivePreset(preset.id);
@@ -247,29 +269,15 @@ export default function WorkbenchPage() {
 
   return (
     <main className="main-container">
-      {/* Workbench Header Banner */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "24px", flexWrap: "wrap", gap: "16px" }}>
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-            <span className="badge-neo badge-neo-scope2">Active Review Environment</span>
-            <span className="badge-neo badge-neo-status">
-              <span className="status-live-dot" /> Synthetic Mode
-            </span>
-          </div>
-          <h1 style={{ fontSize: "2.1rem", margin: 0 }}>Clinical Review Workbench</h1>
-          <p style={{ color: "var(--text-muted)", margin: "4px 0 0", fontSize: "0.92rem" }}>
-            Ingest synthetic clinical documents, execute schema-constrained extraction, and verify evidence quotes against immutable source lines.
-          </p>
+      {/* Workbench Header */}
+      <div style={{ marginBottom: "20px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+          <span className="badge-neo badge-neo-scope2" style={{ fontSize: "0.75rem" }}>Review Environment</span>
         </div>
-
-        <div style={{ display: "flex", gap: "10px" }}>
-          <Link href="/history" className="btn-neo btn-neo-sm btn-neo-secondary">
-            📋 Past Reviews
-          </Link>
-          <Link href="/docs" className="btn-neo btn-neo-sm btn-neo-secondary">
-            📖 Documentation
-          </Link>
-        </div>
+        <h1 style={{ fontSize: "2rem", margin: 0 }}>Clinical Review Workbench</h1>
+        <p style={{ color: "var(--text-muted)", margin: "4px 0 0", fontSize: "0.92rem" }}>
+          Ingest clinical documents, extract structured medical entities, and verify evidence quotes against immutable source lines.
+        </p>
       </div>
 
       {/* Error Alert Box */}
@@ -302,13 +310,13 @@ export default function WorkbenchPage() {
       <div className="workbench-grid">
         {/* LEFT COLUMN: Document Input or Source Inspection */}
         <section className="card-neo" aria-label="Input Clinical Document and Canonical Source">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
             <div>
-              <span className="badge-neo badge-neo-scope2">
-                {analysis ? "Source Document" : "Multi-Modal Ingestion"}
+              <span className="badge-neo badge-neo-scope2" style={{ fontSize: "0.72rem" }}>
+                {analysis ? "Source Document" : "Document Intake"}
               </span>
-              <h2 style={{ fontSize: "1.25rem", marginTop: "6px" }}>
-                {analysis ? "Canonical Segments" : "Document Intake"}
+              <h2 style={{ fontSize: "1.2rem", marginTop: "4px", margin: 0 }}>
+                {analysis ? "Canonical Segments" : "Ingest Document"}
               </h2>
             </div>
             {analysis && (
@@ -317,24 +325,19 @@ export default function WorkbenchPage() {
                 className="btn-neo btn-neo-sm btn-neo-secondary"
                 onClick={() => setAnalysis(null)}
               >
-                + New Document Review
+                + New Review
               </button>
             )}
           </div>
 
           {!analysis ? (
             <div>
-              {/* Synthetic Presets Selector with Clean Spacing */}
-              <div style={{ marginBottom: "18px", padding: "12px 14px", background: "var(--mint-light)", borderRadius: "8px", border: "1.5px solid var(--border-color)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-                  <span style={{ fontSize: "0.78rem", fontWeight: 800, color: "var(--primary-dark)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                    Synthetic Test Encounters:
-                  </span>
-                  <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
-                    Select a case to auto-fill
-                  </span>
-                </div>
-                <div className="sample-presets-bar">
+              {/* Sample Cases Selector - Clean and Minimal */}
+              <div style={{ marginBottom: "14px", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--primary-dark)" }}>
+                  Sample Cases:
+                </span>
+                <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
                   {DEMO_PRESETS.map((p) => (
                     <button
                       key={p.id}
@@ -350,8 +353,8 @@ export default function WorkbenchPage() {
               </div>
 
               <form onSubmit={handleSubmit}>
-                {/* Input Mode Selector Tabs with Clear Gaps */}
-                <div className="tab-bar-neo" role="tablist" style={{ marginBottom: "16px", gap: "8px" }}>
+                {/* Input Mode Selector Tabs */}
+                <div className="tab-bar-neo" role="tablist" style={{ marginBottom: "14px", gap: "6px" }}>
                   <button
                     type="button"
                     role="tab"
@@ -362,7 +365,7 @@ export default function WorkbenchPage() {
                       setApiError(null);
                     }}
                   >
-                    Plain Text Note
+                    Plain Text
                   </button>
                   <button
                     type="button"
@@ -374,7 +377,7 @@ export default function WorkbenchPage() {
                       setApiError(null);
                     }}
                   >
-                    Digital PDF Document
+                    PDF Document
                   </button>
                   <button
                     type="button"
@@ -386,7 +389,7 @@ export default function WorkbenchPage() {
                       setApiError(null);
                     }}
                   >
-                    Document Scan / Photo
+                    Image Scan
                   </button>
                 </div>
 
@@ -395,7 +398,7 @@ export default function WorkbenchPage() {
                   <div style={{ marginBottom: "18px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
                       <label htmlFor="clinical-note-input" style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--primary-dark)" }}>
-                        Synthetic Clinical Text
+                        Clinical Note Text
                       </label>
                       <span
                         style={{
@@ -415,7 +418,7 @@ export default function WorkbenchPage() {
                         setNoteText(e.target.value);
                         setActivePreset("");
                       }}
-                      placeholder="Paste synthetic clinical document text here..."
+                      placeholder="Paste clinical document text here..."
                       rows={14}
                       disabled={isLoading}
                       required
@@ -527,14 +530,14 @@ export default function WorkbenchPage() {
                 )}
 
                 {/* Action Buttons */}
-                <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
+                <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", alignItems: "center" }}>
                   <button
                     type="button"
-                    className="btn-neo btn-neo-secondary"
+                    className="btn-neo btn-neo-sm btn-neo-secondary"
                     onClick={handleClear}
                     disabled={isLoading}
                   >
-                    Clear Form
+                    Clear
                   </button>
                   <button
                     type="submit"
@@ -542,7 +545,7 @@ export default function WorkbenchPage() {
                     disabled={isLoading || isOverLimit || (inputMode === "text" ? !noteText.trim() : !selectedFile)}
                     style={{ fontWeight: 800 }}
                   >
-                    {isLoading ? "Running Review Pipeline..." : "Run Evidence-Linked Review \u2192"}
+                    {isLoading ? "Running Review Pipeline..." : "Review Document \u2192"}
                   </button>
                 </div>
               </form>
@@ -632,9 +635,9 @@ export default function WorkbenchPage() {
           {!isLoading && !analysis && (
             <div className="card-neo empty-state-box" style={{ padding: "48px 24px" }}>
               <div className="empty-state-icon">🛡️</div>
-              <h3 className="empty-state-title" style={{ fontSize: "1.3rem" }}>Awaiting Document Submission</h3>
+              <h3 className="empty-state-title" style={{ fontSize: "1.3rem" }}>Ready for Document Review</h3>
               <p className="empty-state-text" style={{ maxWidth: "440px" }}>
-                Select a synthetic encounter preset on the left or paste/upload a document. The Sanitas pipeline will extract clinical entities, detect factual contradictions, and verify every claim against the original text.
+                Select a sample case on the left or paste/upload a clinical document. The pipeline will extract medical entities, verify evidence quotes against source text, and detect factual contradictions.
               </p>
               <div style={{ display: "flex", gap: "10px", justifyContent: "center", marginTop: "20px" }}>
                 <button
@@ -642,15 +645,8 @@ export default function WorkbenchPage() {
                   className="btn-neo btn-neo-sm btn-neo-primary"
                   onClick={() => handleSelectPreset(DEMO_PRESETS[0])}
                 >
-                  Load Elena Rostova Sample
+                  Load Elena Rostova
                 </button>
-                <Link
-                  href="/docs"
-                  className="btn-neo btn-neo-sm btn-neo-secondary"
-                  style={{ textDecoration: "none" }}
-                >
-                  📖 View System Docs
-                </Link>
               </div>
             </div>
           )}

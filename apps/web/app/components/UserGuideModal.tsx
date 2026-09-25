@@ -43,9 +43,6 @@ export default function UserGuideModal({ isOpen, onClose }: UserGuideModalProps)
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
               <span className="badge-neo badge-neo-scope1" style={{ fontSize: "0.68rem" }}>Quick Start Guide</span>
-              <span className="badge-neo badge-neo-status" style={{ fontSize: "0.68rem" }}>
-                <span className="status-live-dot" /> Synthetic Data
-              </span>
             </div>
             <h2 id="welcome-title" style={{ fontSize: "1.35rem", margin: 0, color: "var(--primary-dark)" }}>
               Welcome to Sanitas Reviewer
@@ -73,7 +70,7 @@ export default function UserGuideModal({ isOpen, onClose }: UserGuideModalProps)
               <div>
                 <strong style={{ fontSize: "0.88rem", color: "var(--primary-dark)" }}>Ingest or Select Note</strong>
                 <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", margin: "2px 0 0" }}>
-                  Choose from 4 pre-loaded synthetic clinical presets, or paste plain text / drop PDF &amp; image scans.
+                  Choose from 4 pre-loaded clinical case presets, or paste plain text / drop PDF &amp; image scans.
                 </p>
               </div>
             </div>

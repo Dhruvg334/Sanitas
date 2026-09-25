@@ -6,6 +6,11 @@ export const metadata: Metadata = {
   title: "Sanitas | AI Clinical Document Reviewer",
   description:
     "Evidence-grounded clinical document review with adaptive multimodal routing and deterministic verification.",
+  icons: {
+    icon: "/favicon.svg",
+    shortcut: "/favicon.svg",
+    apple: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({

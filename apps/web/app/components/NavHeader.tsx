@@ -54,16 +54,18 @@ export default function NavHeader() {
       <header className="top-strip">
         <div className="header-inner">
           <Link href="/" className="brand-logo" aria-label="Sanitas Home">
-            <div className="logo-icon-box">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                <path d="M12 8v8" />
-                <path d="M8 12h8" />
+            <div className="logo-icon-box" style={{ background: "transparent", border: "none", boxShadow: "none", width: "36px", height: "36px" }}>
+              <svg width="36" height="36" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="2" y="2" width="36" height="36" rx="9" fill="#0B3D2E" stroke="#0B3D2E" strokeWidth="2"/>
+                <rect x="17" y="6" width="6" height="28" rx="3" fill="#2D6A4F" />
+                <rect x="6" y="17" width="28" height="6" rx="3" fill="#2D6A4F" />
+                <path d="M7 20H13.5L16.5 13L23.5 27L26.5 20H33" stroke="#B7E4C7" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"/>
+                <circle cx="20" cy="20" r="3.5" fill="#FFD166" stroke="#0B3D2E" strokeWidth="1.5"/>
               </svg>
             </div>
             <div className="brand-titles">
               <span className="brand-name">Sanitas</span>
-              <span className="brand-tagline">AI Clinical Reviewer</span>
+              <span className="brand-tagline">Clinical AI Reviewer</span>
             </div>
           </Link>
 
@@ -104,17 +106,9 @@ export default function NavHeader() {
             >
               📖 Quick Guide
             </button>
-            <span className="badge-neo badge-neo-status">
-              <span className="status-live-dot" /> Synthetic Mode
-            </span>
           </div>
         </div>
       </header>
-
-      {/* Synthetic Safety Banner */}
-      <div className="disclaimer-banner" role="note">
-        <strong>Synthetic Clinical Data Only:</strong> Sanitas is designed and deployed strictly for demonstration and evaluation on synthetic clinical documents. Never enter real Protected Health Information (PHI).
-      </div>
 
       {guideOpen && (
         <UserGuideModal

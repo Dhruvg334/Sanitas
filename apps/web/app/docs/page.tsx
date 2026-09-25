@@ -569,21 +569,21 @@ export default function DocsPage() {
             </p>
 
             <div className="callout-neo callout-info" style={{ margin: "18px 0" }}>
-              <strong>Evaluation Integrity Policy:</strong> Offline/mock evaluation is strictly for CI regression testing and schema validation. Mock metrics are <em>never</em> reported as model performance. Empirical metrics must come from actual Gemini executions on annotated synthetic cases.
+              <strong>Evaluation Integrity Policy:</strong> Offline/mock evaluation is strictly for CI regression testing and schema validation. Mock metrics are <em>never</em> reported as model performance. Empirical metrics must come from actual Gemini executions on annotated test cases.
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
               <div style={{ background: "#FFFFFF", border: "var(--ui-border)", borderRadius: "8px", padding: "16px" }}>
                 <h4 style={{ color: "var(--emerald)", marginBottom: "6px" }}>Offline CI Structural Mode (<code>--mock</code>)</h4>
                 <p style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
-                  Exercises the complete 7-stage pipeline across 7 synthetic benchmark cases using deterministic mocked outputs. Verifies canonicalization, schema conformance, inconsistency rules, and quality gates with zero external API calls.
+                  Exercises the complete 7-stage pipeline across 7 benchmark test cases using deterministic mocked outputs. Verifies canonicalization, schema conformance, inconsistency rules, and quality gates with zero external API calls.
                 </p>
               </div>
 
               <div style={{ background: "#FFFFFF", border: "var(--ui-border)", borderRadius: "8px", padding: "16px" }}>
                 <h4 style={{ color: "var(--emerald)", marginBottom: "6px" }}>Live Gemini Benchmark Mode (<code>--live</code>)</h4>
                 <p style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
-                  Executes live model calls using <code>gemini-3.8-flash</code> across synthetic test encounters. Computes empirical Precision, Recall, F1 Score, Evidence Validity Rate, and Latency percentiles (P50/P95).
+                  Executes live model calls using <code>gemini-3.8-flash</code> across benchmark clinical encounters. Computes empirical Precision, Recall, F1 Score, Evidence Validity Rate, and Latency percentiles (P50/P95).
                 </p>
               </div>
             </div>
@@ -618,7 +618,7 @@ export default function DocsPage() {
                 <code style={{ fontWeight: 800, fontSize: "0.95rem" }}>/api/v1/analyses</code>
               </div>
               <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "8px" }}>
-                Submits a synthetic document for 7-stage review and persistence. Accepts either JSON (<code>&#123;&quot;text&quot;: &quot;...&quot;&#125;</code>) or multipart/form-data with a <code>file</code> field.
+                Submits a clinical document for 7-stage review and persistence. Accepts either JSON (<code>&#123;&quot;text&quot;: &quot;...&quot;&#125;</code>) or multipart/form-data with a <code>file</code> field.
               </p>
               <div style={{ fontSize: "0.78rem", color: "var(--text-dark)", fontFamily: "monospace" }}>
                 Responses: 200 OK (Completed AnalysisResponse), 400 (Invalid Request), 413 (Text/File Too Large), 502 (Verification Failed), 503 (Database Unavailable).

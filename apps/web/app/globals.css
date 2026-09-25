@@ -149,17 +149,6 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 2px 2px 0 var(--border-color);
 }
 
-/* Synthetic Safety Banner */
-.disclaimer-banner {
-  background-color: var(--sunburst-yellow);
-  color: var(--primary-dark);
-  border-bottom: var(--ui-border);
-  padding: 8px 24px;
-  font-size: 0.82rem;
-  text-align: center;
-  font-weight: 600;
-}
-
 /* Main Container */
 .main-container {
   max-width: 1400px;
@@ -1561,6 +1550,75 @@ input:focus, select:focus, textarea:focus {
     grid-template-columns: 1fr;
   }
   .docs-nav-card {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Minimal Home Page Features Grid */
+.features-grid-minimal {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.pillar-card {
+  padding: 24px 20px;
+  background: #FFFFFF;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+}
+
+.pillar-icon {
+  font-size: 1.8rem;
+  margin-bottom: 12px;
+}
+
+.pillar-title {
+  font-size: 1.15rem;
+  color: var(--primary-dark);
+  margin-bottom: 6px;
+}
+
+.pillar-desc {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* Sample Cases Grid */
+.sample-cases-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.sample-case-card {
+  padding: 18px;
+  background: #FFFFFF;
+  display: flex;
+  flex-direction: column;
+  transition: transform var(--motion-normal), box-shadow var(--motion-normal);
+  cursor: pointer;
+}
+
+.sample-case-card:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: var(--ui-shadow-hover);
+}
+
+@media (max-width: 1024px) {
+  .features-grid-minimal {
+    grid-template-columns: 1fr;
+  }
+  .sample-cases-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .sample-cases-grid {
     grid-template-columns: 1fr;
   }
 }

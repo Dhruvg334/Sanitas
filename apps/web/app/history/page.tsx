@@ -82,7 +82,7 @@ export default function HistoryPage() {
           <span className="badge-neo badge-neo-scope2">Audit Log &amp; Persistence</span>
           <h1 style={{ fontSize: "2.2rem", marginTop: "6px" }}>Analysis History</h1>
           <p style={{ color: "var(--text-muted)", margin: 0, fontSize: "0.92rem" }}>
-            Reopen and inspect evidence for previously reviewed synthetic clinical documents.
+            Reopen and inspect evidence for previously reviewed clinical documents.
           </p>
         </div>
         <div style={{ display: "flex", gap: "10px" }}>
@@ -94,7 +94,7 @@ export default function HistoryPage() {
           >
             {isLoading ? "Refreshing..." : "↻ Refresh History"}
           </button>
-          <Link href="/" className="btn-neo btn-neo-sm btn-neo-primary">
+          <Link href="/workbench" className="btn-neo btn-neo-sm btn-neo-primary">
             + New Review
           </Link>
         </div>
@@ -121,9 +121,9 @@ export default function HistoryPage() {
           <div style={{ fontSize: "2.5rem", marginBottom: "12px" }}>📋</div>
           <h3 style={{ margin: "0 0 8px" }}>No Analysis Records Found</h3>
           <p style={{ color: "var(--text-muted)", maxWidth: "420px", margin: "0 auto 20px", fontSize: "0.92rem" }}>
-            Analyses are persisted to PostgreSQL once documents are processed. Start by analyzing a synthetic document in the Workbench.
+            Analyses are persisted to PostgreSQL once documents are processed. Start by analyzing a document in the Workbench.
           </p>
-          <Link href="/" className="btn-neo btn-neo-primary">
+          <Link href="/workbench" className="btn-neo btn-neo-primary">
             Go to Workbench
           </Link>
         </div>
