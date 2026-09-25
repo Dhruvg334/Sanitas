@@ -102,7 +102,15 @@ export default function HomePage() {
       </section>
 
       {/* 3 Core Capability Pillars - Clean Vector Icons (Flaticon Style) */}
-      <section style={{ maxWidth: "1120px", margin: "0 auto", padding: "16px 24px 48px" }}>
+      <section style={{ maxWidth: "1120px", margin: "0 auto", padding: "36px 24px 44px" }}>
+        <div style={{ textAlign: "center", marginBottom: "26px" }}>
+          <span className="badge-neo badge-neo-scope2" style={{ fontSize: "0.74rem" }}>
+            Verification Architecture
+          </span>
+          <h2 style={{ fontSize: "1.75rem", margin: "8px 0 0", color: "var(--primary-dark)" }}>
+            Three-Stage Clinical Safety Gate
+          </h2>
+        </div>
         <div className="features-grid-minimal">
           <div className="card-neo pillar-card">
             <div className="pillar-icon-box">
@@ -160,24 +168,29 @@ export default function HomePage() {
               key={sc.id}
               href={`/workbench?case=${sc.id}`}
               className="card-neo sample-case-card"
-              style={{ textDecoration: "none", color: "inherit", display: "flex", flexDirection: "column", justifyContent: "space-between" }}
+              style={{
+                textDecoration: "none",
+                color: "inherit",
+                display: "flex",
+                flexDirection: "column",
+              }}
             >
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                  <span className={`badge-neo ${sc.badgeType}`} style={{ fontSize: "0.68rem", padding: "2px 8px" }}>
-                    {sc.category}
-                  </span>
-                  <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", fontWeight: 700 }}>
-                    {sc.demographics}
-                  </span>
-                </div>
-                <h3 style={{ fontSize: "1.15rem", margin: "0 0 6px", color: "var(--primary-dark)" }}>{sc.title}</h3>
-                <p style={{ fontSize: "0.82rem", color: "var(--text-muted)", margin: "0 0 12px 0", lineHeight: 1.45 }}>
-                  {sc.summary}
-                </p>
+              <div style={{ marginBottom: "12px" }}>
+                <span className={`badge-neo ${sc.badgeType}`} style={{ fontSize: "0.68rem", padding: "3px 8px", display: "inline-flex" }}>
+                  {sc.category}
+                </span>
               </div>
-              <div style={{ borderTop: "1px solid #E2ECE9", paddingTop: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--emerald)" }}>
+              <h3 style={{ fontSize: "1.2rem", margin: "0 0 4px", color: "var(--primary-dark)", fontWeight: 800 }}>
+                {sc.title}
+              </h3>
+              <div style={{ fontSize: "0.76rem", color: "var(--text-muted)", fontWeight: 600, marginBottom: "12px" }}>
+                {sc.demographics}
+              </div>
+              <p style={{ fontSize: "0.84rem", color: "var(--text-dark)", margin: "0 0 16px 0", lineHeight: 1.5, flexGrow: 1 }}>
+                {sc.summary}
+              </p>
+              <div style={{ borderTop: "1px solid #E2ECE9", paddingTop: "10px", marginTop: "auto", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "var(--emerald)" }}>
                   {sc.focalPoint}
                 </span>
                 <IconArrowRight size={14} color="var(--emerald)" />

@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     app_env: str = "development"
     app_version: str = "0.1.0"
 
-    database_url: str = "postgresql+psycopg://user:password@localhost:5432/sanitas"
+    database_url: str = ""
 
     gemini_api_key: str = ""
     gemini_model: str = "gemini-3.8-flash"

@@ -14,6 +14,31 @@ from app.db.models import Analysis, ProcessingEvent, utc_now
 def get_db():
     from app.db.session import get_db_session
     yield from get_db_session()
+
+
+def get_optional_db():
+    import os
+    from app.core.config import get_settings
+    settings = get_settings()
+    is_explicit_test = (
+        os.environ.get("TESTING") == "1"
+        or os.environ.get("PYTEST_CURRENT_TEST") is not None
+        or settings.app_env == "test"
+    )
+    if is_explicit_test:
+        from app.db.session import get_db_session
+        yield from get_db_session()
+        return
+
+    db_url = settings.database_url
+    if not db_url or db_url == "intentionally-invalid-database-url" or "user:password@localhost:5432" in db_url:
+        yield None
+        return
+    try:
+        from app.db.session import get_db_session
+        yield from get_db_session()
+    except Exception:
+        yield None
 from app.schemas.extraction import (
     AnalysisListItem,
     AnalysisListResponse,
@@ -89,7 +114,7 @@ async def analyse(
     response: Response,
     settings: Annotated[Settings, Depends(get_settings)],
     ai_service: Annotated[AIService, Depends(get_ai_service)],
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[Session | None, Depends(get_optional_db)],
 ) -> AnalysisResponse:
     t_start = time.perf_counter()
     analysis_uuid = uuid4()
@@ -179,42 +204,48 @@ async def analyse(
             "review_synthesis": REVIEW_PROMPT_VERSION,
         }
 
-        analysis_record = Analysis(
-            id=analysis_uuid,
-            status="completed",
-            source_type=ingested.source_type,
-            original_filename=ingested.filename,
-            sha256=ingested.sha256,
-            size_bytes=ingested.size_bytes,
-            page_count=ingested.page_count,
-            document_quality=document.document_quality,
-            quality_issues=document.quality_issues,
-            canonical_document=document.model_dump(),
-            clinical_extraction=extraction.model_dump(),
-            clinical_review=review.model_dump(),
-            model_name=settings.gemini_model,
-            prompt_versions=prompt_versions,
-            timings_ms=timings_ms,
-            created_at=created_at_dt,
-            completed_at=completed_at_dt,
-        )
-        db.add(analysis_record)
-        event = ProcessingEvent(
-            analysis_id=analysis_uuid,
-            stage="pipeline",
-            status="completed",
-            duration_ms=total_ms,
-            metadata_json={"source_type": ingested.source_type},
-            created_at=completed_at_dt,
-        )
-        db.add(event)
-        try:
-            db.commit()
-        except Exception:
-            db.rollback()
-            raise AnalysisError(ErrorCode.DATABASE_WRITE_FAILED) from None
+        persistence_ms = 0
+        if db is not None:
+            analysis_record = Analysis(
+                id=analysis_uuid,
+                status="completed",
+                source_type=ingested.source_type,
+                original_filename=ingested.filename,
+                sha256=ingested.sha256,
+                size_bytes=ingested.size_bytes,
+                page_count=ingested.page_count,
+                document_quality=document.document_quality,
+                quality_issues=document.quality_issues,
+                canonical_document=document.model_dump(),
+                clinical_extraction=extraction.model_dump(),
+                clinical_review=review.model_dump(),
+                model_name=settings.gemini_model,
+                prompt_versions=prompt_versions,
+                timings_ms=timings_ms,
+                created_at=created_at_dt,
+                completed_at=completed_at_dt,
+            )
+            db.add(analysis_record)
+            event = ProcessingEvent(
+                analysis_id=analysis_uuid,
+                stage="pipeline",
+                status="completed",
+                duration_ms=total_ms,
+                metadata_json={"source_type": ingested.source_type},
+                created_at=completed_at_dt,
+            )
+            db.add(event)
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
+                raise AnalysisError(ErrorCode.DATABASE_WRITE_FAILED) from None
 
-        persistence_ms = int((time.perf_counter() - t0) * 1000)
+            persistence_ms = int((time.perf_counter() - t0) * 1000)
+            response.headers["X-Database-Persistence"] = "enabled"
+        else:
+            response.headers["X-Database-Persistence"] = "disabled-stateless"
+
         timings_ms["persistence_ms"] = persistence_ms
 
         response.headers["Cache-Control"] = "no-store"

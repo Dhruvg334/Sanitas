@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { IconFileText, IconFolder } from "../components/Icons";
+import { IconFileText, IconFolder, IconArrowRight, IconShieldCheck } from "../components/Icons";
 
 interface AnalysisListItem {
   analysis_id: string;
@@ -22,12 +22,14 @@ export default function HistoryPage() {
   const [items, setItems] = useState<AnalysisListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isDatabaseStandby, setIsDatabaseStandby] = useState(false);
 
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
   const fetchHistory = useCallback(async () => {
     setIsLoading(true);
     setError(null);
+    setIsDatabaseStandby(false);
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/analyses?limit=50`, {
         cache: "no-store",
@@ -37,7 +39,8 @@ export default function HistoryPage() {
         try {
           const errData = await res.json();
           if (errData?.error?.code === "DATABASE_UNAVAILABLE") {
-            errDesc = "PostgreSQL Database Connection Not Configured on Render. Persistence and historical ledger records require a DATABASE_URL connection string in the Render Dashboard environment settings (under sanitas-api -> Environment). Live document review in the Workbench remains functional once GEMINI_API_KEY is configured.";
+            setIsDatabaseStandby(true);
+            return;
           } else if (errData?.error?.message) {
             errDesc = `${errData.error.message} (${errData.error.code})`;
           }
@@ -69,7 +72,11 @@ export default function HistoryPage() {
           try {
             const errData = await res.json();
             if (errData?.error?.code === "DATABASE_UNAVAILABLE") {
-              errDesc = "PostgreSQL Database Connection Not Configured on Render. Persistence and historical ledger records require a DATABASE_URL connection string in the Render Dashboard environment settings (under sanitas-api -> Environment). Live document review in the Workbench remains functional once GEMINI_API_KEY is configured.";
+              if (!ignore) {
+                setIsDatabaseStandby(true);
+                setError(null);
+              }
+              return;
             } else if (errData?.error?.message) {
               errDesc = `${errData.error.message} (${errData.error.code})`;
             }
@@ -125,7 +132,101 @@ export default function HistoryPage() {
         </div>
       </div>
 
-      {error && (
+      {isDatabaseStandby && !isLoading && (
+        <div
+          className="card-neo"
+          style={{
+            padding: "44px 32px",
+            maxWidth: "840px",
+            margin: "0 auto 36px",
+            textAlign: "center",
+            background: "#FFFFFF",
+          }}
+        >
+          <div style={{ display: "inline-flex", marginBottom: "16px" }}>
+            <span
+              className="badge-neo badge-neo-scope1"
+              style={{
+                padding: "6px 14px",
+                fontSize: "0.8rem",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+              }}
+            >
+              <span className="status-live-dot" /> Live Stateless Review Active
+            </span>
+          </div>
+
+          <h2 style={{ fontSize: "1.85rem", margin: "0 0 10px", color: "var(--primary-dark)" }}>
+            Persistent Record Ledger (Standby)
+          </h2>
+
+          <p
+            style={{
+              color: "var(--text-dark)",
+              fontSize: "0.95rem",
+              lineHeight: 1.6,
+              maxWidth: "640px",
+              margin: "0 auto 24px",
+            }}
+          >
+            Sanitas is currently operating in <strong>live stateless review mode</strong>. Document intake, two-pass Gemini entity extraction, deterministic evidence verification, and contradiction detection in the Workbench are <strong>100% operational</strong>.
+          </p>
+
+          <div
+            style={{
+              background: "var(--mint-light)",
+              border: "1.5px solid var(--emerald)",
+              borderRadius: "8px",
+              padding: "20px 24px",
+              textAlign: "left",
+              marginBottom: "28px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+              <IconShieldCheck size={18} color="var(--emerald)" />
+              <strong style={{ color: "var(--primary-dark)", fontSize: "0.92rem" }}>
+                How to enable persistent history across browser sessions:
+              </strong>
+            </div>
+            <p
+              style={{
+                margin: "0 0 10px",
+                fontSize: "0.85rem",
+                color: "var(--text-dark)",
+                lineHeight: 1.5,
+              }}
+            >
+              In your Render Dashboard (under <em>sanitas-api &rarr; Environment</em>), add the environment variable <code>DATABASE_URL</code> pointing to your PostgreSQL connection string (or <code>sqlite:///./sanitas.db</code>).
+            </p>
+            <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontFamily: "monospace", background: "#FFFFFF", padding: "8px 12px", borderRadius: "4px", border: "1px solid #CBD5E1" }}>
+              DATABASE_URL = postgresql+psycopg://user:password@ep-xyz.neon.tech/sanitas?sslmode=require
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: "12px", justifyContent: "center", flexWrap: "wrap" }}>
+            <Link
+              href="/workbench"
+              className="btn-neo btn-neo-primary"
+              style={{ padding: "12px 28px", fontSize: "0.95rem", display: "inline-flex", alignItems: "center", gap: "8px" }}
+            >
+              <span>Open Clinical Workbench</span>
+              <IconArrowRight size={16} />
+            </Link>
+            <button
+              type="button"
+              onClick={fetchHistory}
+              className="btn-neo btn-neo-secondary"
+              style={{ padding: "12px 24px", fontSize: "0.95rem" }}
+            >
+              ↻ Check Database Status
+            </button>
+          </div>
+        </div>
+      )}
+
+      {error && !isDatabaseStandby && (
         <div className="error-box-neo" role="alert">
           <div className="error-header">
             <span>Persistence Connection Notice</span>

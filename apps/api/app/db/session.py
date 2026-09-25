@@ -37,8 +37,18 @@ def get_engine() -> Engine:
         return _engine
 
     db_url = settings.database_url
-    if not db_url or db_url == "intentionally-invalid-database-url":
+    if not db_url or db_url == "intentionally-invalid-database-url" or "user:password@localhost:5432" in db_url:
         raise AnalysisError(ErrorCode.DATABASE_UNAVAILABLE)
+
+    if db_url.startswith("sqlite"):
+        try:
+            _engine = create_engine(db_url, connect_args={"check_same_thread": False})
+            from app.db.base import Base
+            import app.db.models  # noqa: F401
+            Base.metadata.create_all(bind=_engine)
+            return _engine
+        except Exception:
+            raise AnalysisError(ErrorCode.DATABASE_UNAVAILABLE) from None
 
     # Normalize PostgreSQL URL for psycopg3 if needed
     if db_url.startswith("postgres://"):

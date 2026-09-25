@@ -334,3 +334,35 @@ def test_prompt_injection_text_treated_as_document_data():
             assert captured_docs[0].segments[4].segment_id == "p1-s5"
     finally:
         app.dependency_overrides.pop(get_extractor, None)
+
+
+def test_api_stateless_analysis_when_database_is_absent():
+    from app.api.routes.analyses import get_optional_db
+
+    class MockExtractorSuccess:
+        async def extract(self, document: CanonicalDocument) -> ClinicalExtraction:
+            return make_valid_extraction()
+
+    def mock_no_db():
+        yield None
+
+    app.dependency_overrides[get_extractor] = lambda: MockExtractorSuccess()
+    app.dependency_overrides[get_optional_db] = mock_no_db
+    sample_text = (
+        "Patient: John Doe\n"
+        "Reports persistent headache\n"
+        "Current regimen: Metformin 500 mg BID\n"
+        "Vitals: BP: 120/80 mmHg"
+    )
+    try:
+        with TestClient(app) as client:
+            res = client.post("/api/v1/analyses", json={"text": sample_text})
+            assert res.status_code == 200
+            assert res.headers.get("x-database-persistence") == "disabled-stateless"
+            body = res.json()
+            assert body["status"] == "completed"
+            assert "analysis_id" in body
+    finally:
+        app.dependency_overrides.pop(get_extractor, None)
+        app.dependency_overrides.pop(get_optional_db, None)
+
