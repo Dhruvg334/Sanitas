@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { IconFileText, IconFolder } from "../components/Icons";
 
 interface AnalysisListItem {
   analysis_id: string;
@@ -118,7 +119,9 @@ export default function HistoryPage() {
 
       {!isLoading && items.length === 0 && !error && (
         <div className="card-neo" style={{ textAlign: "center", padding: "64px 20px" }}>
-          <div style={{ fontSize: "2.5rem", marginBottom: "12px" }}>📋</div>
+          <div className="empty-state-icon-box" style={{ margin: "0 auto 16px" }}>
+            <IconFileText size={30} color="var(--primary-dark)" />
+          </div>
           <h3 style={{ margin: "0 0 8px" }}>No Analysis Records Found</h3>
           <p style={{ color: "var(--text-muted)", maxWidth: "420px", margin: "0 auto 20px", fontSize: "0.92rem" }}>
             Analyses are persisted to PostgreSQL once documents are processed. Start by analyzing a document in the Workbench.
@@ -148,8 +151,9 @@ export default function HistoryPage() {
                 </div>
 
                 {item.original_filename && (
-                  <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--primary-dark)", marginBottom: "8px" }}>
-                    📁 {item.original_filename}
+                  <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--primary-dark)", marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <IconFolder size={16} color="var(--emerald)" />
+                    <span>{item.original_filename}</span>
                   </div>
                 )}
 

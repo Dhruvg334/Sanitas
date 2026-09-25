@@ -1,6 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import {
+  IconFileText,
+  IconShieldCheck,
+  IconAlertTriangle,
+  IconArrowRight,
+  IconCheck,
+  IconSparkles,
+} from "./components/Icons";
 
 const SAMPLE_CASES = [
   {
@@ -36,38 +44,62 @@ const SAMPLE_CASES = [
 export default function HomePage() {
   return (
     <main className="landing-page">
-      {/* Centered Minimal Hero */}
-      <section className="hero-centered" style={{ padding: "64px 24px 44px" }}>
-        <div style={{ marginBottom: "16px" }}>
-          <span className="badge-neo badge-neo-scope2" style={{ fontSize: "0.78rem", padding: "4px 12px" }}>
+      {/* Centered Minimal Hero - Full Viewport Coverage */}
+      <section className="hero-centered">
+        <div style={{ marginBottom: "20px" }}>
+          <span
+            className="badge-neo badge-neo-scope2"
+            style={{ fontSize: "0.82rem", padding: "6px 14px", display: "inline-flex", alignItems: "center", gap: "8px" }}
+          >
+            <span className="status-live-dot" style={{ width: "7px", height: "7px" }} />
             Clinical Document Intelligence
           </span>
         </div>
 
-        <h1 className="hero-title" style={{ fontSize: "3rem", maxWidth: "860px", marginBottom: "16px" }}>
+        <h1 className="hero-title">
           Audit-Ready AI Clinical Review Grounded in{" "}
           <span className="hero-highlight">Verifiable Evidence.</span>
         </h1>
 
-        <p className="hero-subtitle" style={{ fontSize: "1.08rem", maxWidth: "660px", marginBottom: "32px" }}>
+        <p className="hero-subtitle">
           Extract structured medical entities, detect clinical contradictions across records,
           and verify every claim against verbatim source lines.
         </p>
 
         {/* Minimal CTAs */}
-        <div className="hero-cta-group" style={{ marginBottom: "48px" }}>
+        <div className="hero-cta-group">
           <Link href="/workbench" className="btn-neo btn-neo-primary hero-btn-main">
-            Launch Workbench &rarr;
+            Launch Workbench <IconArrowRight size={20} />
           </Link>
           <Link href="/docs" className="btn-neo btn-neo-secondary hero-btn-sub">
             View Documentation
           </Link>
         </div>
 
-        {/* 3 Core Capability Pillars - Minimal & Clean */}
-        <div className="features-grid-minimal" style={{ width: "100%", maxWidth: "1080px" }}>
+        {/* Trust & Grounding Bar */}
+        <div className="hero-trust-bar">
+          <div className="trust-item">
+            <IconShieldCheck size={18} color="var(--emerald)" />
+            <span>Deterministic Evidence Quotes</span>
+          </div>
+          <div className="trust-item">
+            <IconCheck size={18} color="var(--emerald)" />
+            <span>Zero Hallucination Tolerance</span>
+          </div>
+          <div className="trust-item">
+            <IconSparkles size={18} color="var(--emerald)" />
+            <span>Schema Enforced Gemini 2.5</span>
+          </div>
+        </div>
+      </section>
+
+      {/* 3 Core Capability Pillars - Clean Vector Icons (Flaticon Style) */}
+      <section style={{ maxWidth: "1120px", margin: "0 auto", padding: "16px 24px 48px" }}>
+        <div className="features-grid-minimal">
           <div className="card-neo pillar-card">
-            <div className="pillar-icon">📋</div>
+            <div className="pillar-icon-box">
+              <IconFileText size={24} color="var(--primary-dark)" />
+            </div>
             <h3 className="pillar-title">Structured Fact Extraction</h3>
             <p className="pillar-desc">
               Schema-enforced extraction of demographics, symptoms, diagnoses, medications, vitals, and documented allergies.
@@ -75,7 +107,9 @@ export default function HomePage() {
           </div>
 
           <div className="card-neo pillar-card">
-            <div className="pillar-icon">🛡️</div>
+            <div className="pillar-icon-box">
+              <IconShieldCheck size={24} color="var(--primary-dark)" />
+            </div>
             <h3 className="pillar-title">Deterministic Evidence Gate</h3>
             <p className="pillar-desc">
               Mathematical quote substring matching against immutable source text. Every finding links to verifiable evidence.
@@ -83,7 +117,9 @@ export default function HomePage() {
           </div>
 
           <div className="card-neo pillar-card">
-            <div className="pillar-icon">⚠️</div>
+            <div className="pillar-icon-box">
+              <IconAlertTriangle size={24} color="var(--primary-dark)" />
+            </div>
             <h3 className="pillar-title">Contradiction Detection</h3>
             <p className="pillar-desc">
               Rule-based identification of allergy conflicts, medication status discrepancies, and documentation inconsistencies.

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import UserGuideModal from "./UserGuideModal";
+import { IconBook } from "./Icons";
 
 export default function NavHeader() {
   const pathname = usePathname();
@@ -102,9 +103,10 @@ export default function NavHeader() {
               className="btn-neo btn-neo-xs btn-neo-secondary"
               onClick={() => openGuide("overview")}
               title="Open Sanitas Quick Operational Guide"
-              style={{ fontWeight: 800 }}
+              style={{ fontWeight: 800, display: "inline-flex", alignItems: "center", gap: "6px" }}
             >
-              📖 Quick Guide
+              <IconBook size={15} color="var(--primary-dark)" />
+              <span>Quick Guide</span>
             </button>
           </div>
         </div>

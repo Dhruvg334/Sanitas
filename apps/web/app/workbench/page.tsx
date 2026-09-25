@@ -2,6 +2,17 @@
 
 import { useState, useRef, useEffect } from "react";
 import ReviewReportView, { AnalysisResponse } from "../components/ReviewReportView";
+import {
+  IconFileText,
+  IconFilePdf,
+  IconCamera,
+  IconShieldCheck,
+  IconAlertTriangle,
+  IconArrowRight,
+  IconCopy,
+  IconCheck,
+  IconClose,
+} from "../components/Icons";
 
 interface SafeError {
   code: string;
@@ -284,7 +295,10 @@ export default function WorkbenchPage() {
       {apiError && (
         <div className="error-box-neo" role="alert">
           <div className="error-header">
-            <span>Analysis Verification Error</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <IconAlertTriangle size={18} color="var(--alert-red)" />
+              <span>Analysis Verification Error</span>
+            </div>
             <span className="badge-neo badge-neo-high">{apiError.code}</span>
           </div>
           <p className="error-msg">{apiError.message}</p>
@@ -300,7 +314,10 @@ export default function WorkbenchPage() {
       {networkError && (
         <div className="error-box-neo" role="alert">
           <div className="error-header">
-            <span>Backend Connectivity Notice</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <IconAlertTriangle size={18} color="var(--alert-red)" />
+              <span>Backend Connectivity Notice</span>
+            </div>
           </div>
           <p className="error-msg">{networkError}</p>
         </div>
@@ -310,12 +327,12 @@ export default function WorkbenchPage() {
       <div className="workbench-grid">
         {/* LEFT COLUMN: Document Input or Source Inspection */}
         <section className="card-neo" aria-label="Input Clinical Document and Canonical Source">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "18px", flexWrap: "wrap", gap: "10px" }}>
             <div>
               <span className="badge-neo badge-neo-scope2" style={{ fontSize: "0.72rem" }}>
                 {analysis ? "Source Document" : "Document Intake"}
               </span>
-              <h2 style={{ fontSize: "1.2rem", marginTop: "4px", margin: 0 }}>
+              <h2 style={{ fontSize: "1.25rem", marginTop: "4px", margin: 0 }}>
                 {analysis ? "Canonical Segments" : "Ingest Document"}
               </h2>
             </div>
@@ -333,7 +350,7 @@ export default function WorkbenchPage() {
           {!analysis ? (
             <div>
               {/* Sample Cases Selector - Clean and Minimal */}
-              <div style={{ marginBottom: "14px", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+              <div className="sample-presets-bar">
                 <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--primary-dark)" }}>
                   Sample Cases:
                 </span>
@@ -354,7 +371,7 @@ export default function WorkbenchPage() {
 
               <form onSubmit={handleSubmit}>
                 {/* Input Mode Selector Tabs */}
-                <div className="tab-bar-neo" role="tablist" style={{ marginBottom: "14px", gap: "6px" }}>
+                <div className="tab-bar-neo" role="tablist">
                   <button
                     type="button"
                     role="tab"
@@ -365,7 +382,8 @@ export default function WorkbenchPage() {
                       setApiError(null);
                     }}
                   >
-                    Plain Text
+                    <IconFileText size={18} />
+                    <span>Plain Text</span>
                   </button>
                   <button
                     type="button"
@@ -377,7 +395,8 @@ export default function WorkbenchPage() {
                       setApiError(null);
                     }}
                   >
-                    PDF Document
+                    <IconFilePdf size={18} />
+                    <span>PDF Document</span>
                   </button>
                   <button
                     type="button"
@@ -389,7 +408,8 @@ export default function WorkbenchPage() {
                       setApiError(null);
                     }}
                   >
-                    Image Scan
+                    <IconCamera size={18} />
+                    <span>Image Scan</span>
                   </button>
                 </div>
 
@@ -443,7 +463,9 @@ export default function WorkbenchPage() {
                         }
                       }}
                     >
-                      <div className="dropzone-icon">📄</div>
+                      <div className="dropzone-icon-box">
+                        <IconFilePdf size={28} />
+                      </div>
                       <div className="dropzone-title">
                         {selectedFile ? selectedFile.name : "Click to select or drag & drop a PDF document"}
                       </div>
@@ -488,7 +510,9 @@ export default function WorkbenchPage() {
                         }
                       }}
                     >
-                      <div className="dropzone-icon">📷</div>
+                      <div className="dropzone-icon-box">
+                        <IconCamera size={28} />
+                      </div>
                       <div className="dropzone-title">
                         {selectedFile ? selectedFile.name : "Click to select or drop a document image scan"}
                       </div>
@@ -530,22 +554,29 @@ export default function WorkbenchPage() {
                 )}
 
                 {/* Action Buttons */}
-                <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", alignItems: "center" }}>
+                <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", alignItems: "center", marginTop: "18px" }}>
                   <button
                     type="button"
                     className="btn-neo btn-neo-sm btn-neo-secondary"
                     onClick={handleClear}
                     disabled={isLoading}
+                    style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
                   >
-                    Clear
+                    <IconClose size={15} />
+                    <span>Clear</span>
                   </button>
                   <button
                     type="submit"
                     className="btn-neo btn-neo-primary"
                     disabled={isLoading || isOverLimit || (inputMode === "text" ? !noteText.trim() : !selectedFile)}
-                    style={{ fontWeight: 800 }}
+                    style={{ fontWeight: 800, display: "inline-flex", alignItems: "center", gap: "8px" }}
                   >
-                    {isLoading ? "Running Review Pipeline..." : "Review Document \u2192"}
+                    {isLoading ? "Running Review Pipeline..." : (
+                      <>
+                        <span>Review Document</span>
+                        <IconArrowRight size={18} />
+                      </>
+                    )}
                   </button>
                 </div>
               </form>
@@ -579,15 +610,25 @@ export default function WorkbenchPage() {
                     >
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
                         <span className="segment-id-tag">
-                          {seg.segment_id} {isHighlighted && "★ EVIDENCE MATCH"}
+                          {seg.segment_id} {isHighlighted && "• EVIDENCE MATCH"}
                         </span>
                         <button
                           type="button"
                           className="btn-neo btn-neo-xs btn-neo-secondary"
-                          style={{ fontSize: "0.68rem", padding: "2px 6px" }}
+                          style={{ fontSize: "0.68rem", padding: "2px 8px", display: "inline-flex", alignItems: "center", gap: "4px" }}
                           onClick={() => handleCopySegment(seg.text, seg.segment_id)}
                         >
-                          {copiedSegmentId === seg.segment_id ? "✓ Copied" : "Copy"}
+                          {copiedSegmentId === seg.segment_id ? (
+                            <>
+                              <IconCheck size={12} color="var(--emerald)" />
+                              <span>Copied</span>
+                            </>
+                          ) : (
+                            <>
+                              <IconCopy size={12} />
+                              <span>Copy</span>
+                            </>
+                          )}
                         </button>
                       </div>
                       <div>{seg.text}</div>
@@ -633,13 +674,15 @@ export default function WorkbenchPage() {
           )}
 
           {!isLoading && !analysis && (
-            <div className="card-neo empty-state-box" style={{ padding: "48px 24px" }}>
-              <div className="empty-state-icon">🛡️</div>
-              <h3 className="empty-state-title" style={{ fontSize: "1.3rem" }}>Ready for Document Review</h3>
-              <p className="empty-state-text" style={{ maxWidth: "440px" }}>
+            <div className="card-neo empty-state-box">
+              <div className="empty-state-icon-box">
+                <IconShieldCheck size={32} color="var(--primary-dark)" />
+              </div>
+              <h3 className="empty-state-title">Ready for Document Review</h3>
+              <p className="empty-state-text">
                 Select a sample case on the left or paste/upload a clinical document. The pipeline will extract medical entities, verify evidence quotes against source text, and detect factual contradictions.
               </p>
-              <div style={{ display: "flex", gap: "10px", justifyContent: "center", marginTop: "20px" }}>
+              <div style={{ display: "flex", gap: "10px", justifyContent: "center", marginTop: "24px" }}>
                 <button
                   type="button"
                   className="btn-neo btn-neo-sm btn-neo-primary"

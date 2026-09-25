@@ -3,6 +3,7 @@
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import ReviewReportView, { AnalysisResponse } from "../../components/ReviewReportView";
+import { IconLink, IconCheck } from "../../components/Icons";
 
 export default function DurableReviewPage({
   params,
@@ -77,7 +78,17 @@ export default function DurableReviewPage({
             className="btn-neo btn-neo-sm btn-neo-secondary"
             onClick={handleCopyLink}
           >
-            {copied ? "✓ Link Copied!" : "🔗 Shareable Link"}
+            {copied ? (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                <IconCheck size={14} color="var(--emerald)" />
+                <span>Link Copied!</span>
+              </span>
+            ) : (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                <IconLink size={14} />
+                <span>Shareable Link</span>
+              </span>
+            )}
           </button>
           <Link href="/" className="btn-neo btn-neo-sm btn-neo-primary">
             + New Analysis

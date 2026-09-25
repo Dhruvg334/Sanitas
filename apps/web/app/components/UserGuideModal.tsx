@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { IconClose } from "./Icons";
 
 interface UserGuideModalProps {
   isOpen: boolean;
@@ -54,7 +55,7 @@ export default function UserGuideModal({ isOpen, onClose }: UserGuideModalProps)
             onClick={handleDismiss}
             aria-label="Close Guide"
           >
-            ✕
+            <IconClose size={16} />
           </button>
         </div>
 

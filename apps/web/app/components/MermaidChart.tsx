@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import mermaid from "mermaid";
+import { IconCopy, IconCheck, IconMaximize, IconClose } from "./Icons";
 
 interface MermaidChartProps {
   chart: string;
@@ -121,7 +122,17 @@ export default function MermaidChart({ chart, title }: MermaidChartProps) {
             onClick={handleCopyCode}
             title="Copy Mermaid Diagram Source"
           >
-            {copied ? "✓ Copied" : "📋 Copy Code"}
+            {copied ? (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                <IconCheck size={13} color="var(--emerald)" />
+                <span>Copied</span>
+              </span>
+            ) : (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                <IconCopy size={13} />
+                <span>Copy Code</span>
+              </span>
+            )}
           </button>
           <button
             type="button"
@@ -129,7 +140,17 @@ export default function MermaidChart({ chart, title }: MermaidChartProps) {
             onClick={() => setIsFullscreen(!isFullscreen)}
             title={isFullscreen ? "Exit Fullscreen" : "Expand Diagram Fullscreen"}
           >
-            {isFullscreen ? "✕ Close Expanded View" : "⛶ Full View"}
+            {isFullscreen ? (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                <IconClose size={13} />
+                <span>Close View</span>
+              </span>
+            ) : (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                <IconMaximize size={13} />
+                <span>Full View</span>
+              </span>
+            )}
           </button>
         </div>
       </div>
